@@ -317,10 +317,7 @@ var getInternalState = () => {
  * @param {String} state
  */
 var setInternalState = (state) => {
-    log(state);
     let values = JSON.parse(state);
-    log(JSON.stringify(values))
-
     for (var id in values.systems){
         systems[id].setInternalState(values.systems[id])
     }
