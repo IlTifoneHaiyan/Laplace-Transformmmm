@@ -7,29 +7,60 @@ import { TouchType } from "../api/UI/properties/TouchType";
 
 var id = "LT";
 var name = "Laplace Transforms";
-var tauExponent = 1
+var tauExponent = 0.05;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.0";
+var version = "1.1";
 var t = BigNumber.ZERO
 var currency; 
 var laplaceActive = false;
 var activeSystemId = 0;
 var systems = []
-
+var qExponent, rExponent, challengeUnlock;
 var init = () => {
     currency = theory.createCurrency();
-    
-    // Takes an upgrade within a challenge object and converts it into a purchasable theory upgrade
+    getCustomCost = (total) => 25 * (total + 1) * tauExponent;
+      /////////////////////
+    // Permanent Upgrades
+    theory.createPublicationUpgrade(1, currency, 1e8);
+    theory.createBuyAllUpgrade(2, currency, 1e10);
+    theory.createAutoBuyerUpgrade(3, currency, 1e20);
+
+    theory.setMilestoneCost(new CustomCost(total => BigNumber.from(getCustomCost(total))));
+      ////////////// ///////
+    // Milestone Upgrades
+    {
+        qExponent = theory.createMilestoneUpgrade(0, 3);
+        qExponent.getDescription = (_) => Localization.getUpgradeIncCustomExpDesc("q", 0.05);
+        qExponent.getInfo = (_) => Localization.getUpgradeIncCustomExpInfo("q", "0.05");
+        qExponent.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
+    }
+    {
+        rExponent = theory.createMilestoneUpgrade(1, 3);
+        rExponent.getDescription = (_) => Localization.getUpgradeIncCustomExpDesc("r", 0.05);
+        rExponent.getInfo = (_) => Localization.getUpgradeIncCustomExpInfo("r", "0.05");
+        rExponent.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
+    }
+    {
+        challengeUnlock = theory.createMilestoneUpgrade(2,1);
+        challengeUnlock.getDescription = (_) => ("Unlock challenges");
+        challengeUnlock.getInfo = (_) => ("Unlock challenges");
+        // challengeUnlock.canBeRefunded = () => false;
+    }
+
+
+    // Takes an upgrade within each system and converts it into a purchasable theory upgrade
     var upgradeFactory = (systemId, upgrade) => {
         let temp = theory.createUpgrade(100*systemId + upgrade.internalId, currency, upgrade.costModel);
         temp.getDescription = upgrade.description;
         temp.getInfo = upgrade.info;
-        // Any new upgrades defined this way will be set to false by default and will be available only when the challenge is active
+        // Any new upgrades defined this way will be set to false by default and will be available only when the system is active
         temp.isAvailable = false;
         if (upgrade.maxLevel) temp.maxLevel = upgrade.maxLevel;
         return temp;
     }
+
+    // Defines systems used within the theory including main equation and challenges
 
     // Abstract Class
     class System {
@@ -80,12 +111,13 @@ var init = () => {
             super();
             this.systemId = 0;
             this.q = BigNumber.ONE;
-            this.r = BigNumber.ONE;     
+            this.r = BigNumber.ONE; 
+            this.currency = BigNumber.ZERO;    
             this.q1 = {
                 internalId: 1,
-                description: (level) => Utils.getMath("q_1=" + Utils.getStepwisePowerSum(level, 2, 10, 0).toString(0)),
+                description: (level) => Utils.getMath("q_1=" + Utils.getStepwisePowerSum(this.q1.upgrade.level, 2, 10, 0).toString(0)),
                 info: (level) =>  Utils.getMathTo("q_1=" + this.getQ1(this.q1.upgrade.level), "q_1=" + Utils.getStepwisePowerSum(level, 2, 10, 0).toString(0)),
-                costModel: new ExponentialCost(1e5, Math.log2(18)),
+                costModel: new FirstFreeCost(new ExponentialCost(5, Math.log2(2))),
                 laplaceUpgrade: false,
             }
     
@@ -136,41 +168,49 @@ var init = () => {
 
         tick(elapsedTime, multiplier){
             let dt = BigNumber.from(elapsedTime * multiplier);
-            let bonus = getPublicationMultiplier(theory.tau);
+            let bonus = theory.publicationMultiplier;
             if (laplaceActive) {
                 let dr = this.getR1(this.r1.upgrade.level) * this.getR2(this.r2.upgrade.level) / this.getS(this.expS.upgrade.level);
                 this.r += dt * dr;
             }
             else {
                 this.q += this.getQ1(this.q1.upgrade.level) * this.getQ2(this.q2.upgrade.level);
-            }
-
-            this.currency += bonus * this.q * this.r * dt;
+            }            
+            this.currency += bonus * this.q.pow(1 + qExponent.level * 0.05) * this.r.pow(1 + rExponent.level * 0.05) * dt;
             theory.invalidateSecondaryEquation();
         }
 
         getInternalState(){
             return JSON.stringify({
-                q: BigNumber.toString(this.q),
-                r: BigNumber.toString(this.r),
-                currency: BigNumber.toString(this.currency)
+                q: `${this.q}`,
+                r: `${this.r}`,
+                currency: `${this.currency}`
             })
         }
         
         setInternalState(state){
-            let values = JSON.parse(state)
-            this.q = BigNumber.from(values.q);
-            this.r = BigNumber.from(values.r);
-            this.currency = BigNumber.from(values.currency);
+            log(state)
+            let values = JSON.parse(state);
+            this.q = parseBigNumber(values.q);
+            this.r = parseBigNumber(values.r);
+            this.currency = parseBigNumber(values.currency);
         }
 
         primaryEquation(){
-           return "\\dot{\\rho} = qr"
+           theory.primaryEquationHeight = 75;
+           log(1 + qExponent.level * 0.05)
+           let qExponentText = (qExponent.level > 0)? "^{" + (1 + qExponent.level * 0.05).toString() + "}" : "";
+           let rExponentText = (rExponent.level > 0)? "^{" + (1 + rExponent.level * 0.05).toString() + "}" : "";
+           let result = "\\begin{matrix}";
+           result += "\\dot{\\rho} = q" + qExponentText +  "r" + rExponentText + "\\\\";
+           result += theory.latexSymbol + "=\\max\\rho^{" + tauExponent + "} \\\\";
+           result += "\\end{matrix}"
+           return result;
         }
 
         secondaryEquation(){
             theory.secondaryEquationHeight = 75;
-            theory.secondaryEquationScale = 1.5;
+            theory.secondaryEquationScale = 1.4;
             if (laplaceActive) {
                 // Equation while under Laplace transform
                 let result = "\\begin{matrix}"
@@ -190,8 +230,9 @@ var init = () => {
         }
 
         processPublish(){
-            q = BigNumber.ONE;
-            r = BigNumber.ONE;            
+            this.q = BigNumber.ONE;
+            this.r = BigNumber.ONE;  
+            this.currency = BigNumber.ZERO;          
         }
 
     }
@@ -211,10 +252,11 @@ var updateAvailability = () => {
  * @param {number} multiplier - Multiplier to the elapsed time to account for rewards. (either 1 or 1.5)
  */
 var tick = (elapsedTime, multiplier) => {
-    systems[activeSystemId].tick(elapsedTime, multiplier)
-    theory.invalidatePrimaryEquation()
-    theory.invalidateSecondaryEquation()
-    theory.invalidateTertiaryEquation()
+    systems[activeSystemId].tick(elapsedTime, multiplier);
+    currency.value = systems[activeSystemId].currency;
+    theory.invalidatePrimaryEquation();
+    theory.invalidateSecondaryEquation();
+    theory.invalidateTertiaryEquation();
 }
 
 /**
@@ -268,7 +310,7 @@ var getPublicationMultiplier = (tau) => tau.pow(basePubExp/tauExponent)/2
  * returned by this function.
  * @returns {BigNumber} Note: The result will be clamped to [0,∞)
  */
-var getTau = () => theory.tau.pow(tauExponent);
+var getTau = () => currency.value.pow(tauExponent);
 
 /**
  * Given a value of tau, returns the corresponding value in currency.
@@ -280,14 +322,14 @@ var getTau = () => theory.tau.pow(tauExponent);
  * @param {BigNumber} tau - The tau value to convert. Use the provided parameter since it may be different from the current tau value.
  * @returns {Array.<BigNumber,string>} A pair [currency, symbol] where 'currency' is the currency value corresponding to the tau parameter, and 'symbol' is the symbol of the returned currency. 
  */
-var getCurrencyFromTau = (tau) => tau.pow(1/tauExponent);
+var getCurrencyFromTau = (tau) => [tau.max(BigNumber.ONE).pow(1/tauExponent), currency.symbol];
 
 /**
  * Called right after publishing.
  * A good place to reset your internal state.
  */
 var postPublish = () => {
-    q, r = BigNumber.ONE;
+    systems[activeSystemId].processPublish()
     theory.invalidateSecondaryEquation();
 };
 
@@ -326,37 +368,70 @@ var setInternalState = (state) => {
     laplaceActive = values.laplaceActive;
 };
 
+// UI
+
 var laplaceButton = ui.createButton({
     text: !laplaceActive? "Apply Laplace Transform" : "Invert Laplace Transform",
     onClicked: () =>{
         laplaceActive = !laplaceActive
         laplaceButton.text = !laplaceActive? "Apply Laplace Transform" : "Invert Laplace Transform"
         updateAvailability()
-    }
+    },
+    row: 1,
+    column: 0
 }
-)
-/**
- * Returns a UI element (View class) to put on top
- * of the equation area. This function is ignored
- * if getEquationDelegate is defined.
- * @returns{View} An instance of a UI element.
- */
-var getEquationOverlay = () => {
-    return ui.createGrid({
-        columnDefinitions: ["1*", "3*", "1*"],
-        columnSpacing: 0,
+);
+
+var challengeMenuButton = ui.createButton({
+    text: "Open Challenges",
+    onClicked: () =>{
+        let challengeMenu = createChallengeMenu();
+        challengeMenu.show();
+    },
+    row:1,
+    column: 1
+}
+);
+
+var createChallengeMenu = () => {
+    let menu = ui.createPopup({
+        title: "Challenges - Coming Soon...",
+        content: ui.createStackLayout({
+            }),
+    })
+    return menu;
+}
+
+var goToPreviousStage = () => {
+    log("hello");
+   // let challengeMenu = createChallengeMenu();
+   // challengeMenu.show();
+}
+
+var getCurrencyBarDelegate = () => {
+    challengeMenuButton.isVisible = () => challengeUnlock.level > 0;
+    currencyBar = ui.createGrid({
+        columnDefinitions: ["20*", "30*", "auto"],
         children: [
-            ui.createFrame({
+            currencyBarTau = ui.createLatexLabel({
+                text: () => Utils.getMath(theory.tau + theory.latexSymbol),
+                row: 0,
+                column: 0,
+                horizontalOptions: LayoutOptions.CENTER,
+                verticalOptions: LayoutOptions.CENTER,
+            }),
+            currencyBarCurrency = ui.createLatexLabel({
+                text: () => Utils.getMath(currency.value.toString() + "\\rho"),
                 row: 0,
                 column: 1,
-                horizontalOptions: LayoutOptions.FILL_AND_EXPAND,
-                verticalOptions: LayoutOptions.START,
-                children: [laplaceButton]
-            })
-        ]
-    })
-};
+                horizontalOptions: LayoutOptions.CENTER,
+                verticalOptions: LayoutOptions.CENTER,
+            }),
+            laplaceButton,
+            challengeMenuButton
+        ],
+    });
+    return currencyBar;
+}
 
 init();
-
-//
