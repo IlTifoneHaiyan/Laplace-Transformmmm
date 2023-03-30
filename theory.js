@@ -362,6 +362,7 @@ var getCurrencyFromTau = (tau) => [tau.max(BigNumber.ONE).pow(1/tauExponent), cu
 var postPublish = () => {
     systems[activeSystemId].processPublish()
     theory.invalidateSecondaryEquation();
+    laplaceActive = false;
 };
 
 /**
