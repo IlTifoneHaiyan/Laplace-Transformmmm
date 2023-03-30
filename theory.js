@@ -107,7 +107,7 @@ var init = () => {
         }
     }
     
-    class MainSystem extends System {        
+    class MainSystem extends System {
         constructor(){
             super();
             this.systemId = 0;
@@ -183,7 +183,7 @@ var init = () => {
         getC2(level) { return BigNumber.TWO.pow(level); }
         getC3(level) { return BigNumber.FIVE.pow(level); }
         getTDot(level) { return 0.05 * level; }
-        getSDot(level) { return 2 ** level; }
+        getSDot(level) { return BigNumber.TWO.pow(level); }
         getC1S(level) { return BigNumber.TWO.pow(level); }
         getC2S(level) { return BigNumber.TEN.pow(level * 0.5);}
 
@@ -196,7 +196,7 @@ var init = () => {
             }
             else {
                 this.t += this.getTDot(this.tdot.upgrade.level) * dt;
-                this.q =  this.getC3(this.c3.upgrade.level) * (1 - BigNumber.E.pow(-1 * this.t));
+                this.q =  this.getC3(this.c3.upgrade.level) * (1 - BigNumber.E.pow(-1 * this.t / this.getC3(this.c3.upgrade.level)));
             }  
             this.currency += bonus * this.getC1(this.c1.upgrade.level).pow(1 + c1Exponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.lambda.pow(0.5) * this.q * dt;
             theory.invalidateSecondaryEquation();
@@ -249,7 +249,7 @@ var init = () => {
                 // Default case
                 let result =  "\\begin{matrix}"
                 result += "\\lambda_t = 1 \\\\"
-                result += "q_t = c_{3}(1-e^{-t})"
+                result += "q_t = c_{3}(1-e^{\\frac{-t}{c_3}})"
                 result += "\\end{matrix}"
                 return result;
             }        
@@ -261,7 +261,8 @@ var init = () => {
 
         processPublish(){
             this.q = BigNumber.ONE;
-            this.t = BigNumber.ONE;  
+            this.t = BigNumber.ZERO;  
+            this.s = BigNumber.ONE
             this.currency = BigNumber.ZERO;          
         }
 
