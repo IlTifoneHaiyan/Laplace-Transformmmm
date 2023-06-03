@@ -231,9 +231,9 @@ var init = () => {
             let bonus = theory.publicationMultiplier;
             if (laplaceActive) {
                 let tdot = this.t * dt * (this.c2s.upgrade.level > 0);
-                this.t -= tdot;
+                this.t = Math.max(this.t - tdot, BigNumber.ZERO);
                 this.s += tdot;
-                this.laplaceCurrency += bonus.pow(0.1 + piExponent.level * 0.1) * this.getQS();
+                this.laplaceCurrency += bonus.pow(0.1 + piExponent.level * 0.1) * this.getQS()* dt;
             }
             else {
                 this.t += this.getTDot(this.tdot.upgrade.level) * dt;
