@@ -4,6 +4,7 @@ import { parseBigNumber, BigNumber } from "../api/BigNumber";
 import { theory } from "../api/Theory";
 import { Utils } from "../api/Utils";
 import { TouchType } from "../api/UI/properties/TouchType";
+import { log } from "../../../Downloads/TheorySDK.Win.1.4.29/api/Utils";
 
 var id = "LT";
 var name = "Laplace Transforms";
@@ -27,7 +28,7 @@ var init = () => {
     // Permanent Upgrades
     theory.createPublicationUpgrade(1, currency, 1e7);
     theory.createBuyAllUpgrade(2, currency, 1e10);
-    theory.createAutoBuyerUpgrade(3, currency, 1e20);
+    theory.createAutoBuyerUpgrade(3, currency, 1e15);
 
     {
         laplaceTransformUnlock = theory.createPermanentUpgrade(4, currency, new LinearCost(1e4, 0));
@@ -150,11 +151,10 @@ var init = () => {
             this.systemId = 0;
             this.s = BigNumber.from((1 + 5 ** 0.5) / 2 - 1);
             this.t = BigNumber.ZERO;
-            this.lambda = BigNumber.ONE;
             this.currency = BigNumber.ZERO;
             this.laplaceCurrency = BigNumber.ZERO;
             this.c1 = {
-                internalId: 1,
+                internalId: 4,
                 description: (_) => Utils.getMath("c_1=" + this.getC1(this.c1.upgrade.level)),
                 info: (amount) => Utils.getMathTo("c_1=" + this.getC1(this.c1.upgrade.level), "c_1=" + this.getC1(this.c1.upgrade.level + amount)),
                 costModel: new ExponentialCost(10, Math.log2(1.8)),
@@ -178,7 +178,7 @@ var init = () => {
             }
 
             this.tdot = {
-                internalId: 4,
+                internalId: 1,
                 description: (_) => Utils.getMath("\\dot{t}=" + this.getTDot(this.tdot.upgrade.level)),
                 info: (amount) => Utils.getMathTo("\\dot{t} = " + this.getTDot(this.tdot.upgrade.level), "\\dot{t}=" + this.getTDot(this.tdot.upgrade.level + amount)),
                 costModel: new FirstFreeCost(new ExponentialCost(4e2, Math.log2(15))),
@@ -201,15 +201,23 @@ var init = () => {
                 laplaceUpgrade: true
             }
 
-            this.lambdaS = {
+            this.lambda = {
                 internalId: 7,
-                description: (_) => Utils.getMath("\\lambda_{s} = " + this.getLambdaS(this.lambdaS.upgrade.level)),
-                info: (amount) => Utils.getMathTo("\\lambda_{s} = " + this.getLambdaS(this.lambdaS.upgrade.level), "\\lambda_{s} = " + this.getLambdaS(this.lambdaS.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e6, Math.log2(1e2)),
-                laplaceUpgrade: true
+                description: (_) => Utils.getMath("\\lambda = " + this.getLambda(this.lambda.upgrade.level)),
+                info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
+                costModel: new ExponentialCost(1e3, Math.log2(1e5)),
+                laplaceUpgrade: true,
+                maxLevel: 40
+            }
+            this.lambdaExponent = {
+                internalId: 8,
+                description: (_) => Localization.getUpgradeIncCustomExpDesc("λ", "0.1"),
+                info: (_) => Localization.getUpgradeIncCustomExpInfo("λ", "0.1"),
+                costModel: new ExponentialCost(1e50, Math.log2(1e40)),
+                laplaceUpgrade: true,
             }
 
-            this.upgrades = [this.c1, this.c2, this.c3, this.tdot, this.c1s, this.c2s, this.lambdaS];
+            this.upgrades = [this.tdot, this.c1, this.c2, this.c3, this.c1s, this.c2s, this.lambda, this.lambdaExponent];
             for (var upgrade of this.upgrades) {
                 let temp = upgradeFactory(this.systemId, upgrade, this);
                 // this creates a 'pointer' to the real upgrade within the object instance
@@ -223,22 +231,21 @@ var init = () => {
         getTDot(level) { return 0.05 * Utils.getStepwisePowerSum(level, 2, 10, 0); }
         getC1S(level) { return BigNumber.E.pow(level * 0.5); }
         getC2S(level) { return Utils.getStepwisePowerSum(level, 2, 10, 0); }
-        getLambdaS(level) { return BigNumber.TEN.pow(level);}
+        getLambda(level) { return BigNumber.from(1e3).pow(level);}
         getQS() { return (this.getC2S(this.c2s.upgrade.level).pow(2) * this.getC1S(this.c1s.upgrade.level) * this.s * (this.s + 1)); }
 
         tick(elapsedTime, multiplier) {
             let dt = BigNumber.from(elapsedTime * multiplier);
             let bonus = theory.publicationMultiplier;
             if (laplaceActive) {
-                let tdot = this.t * dt * (this.c2s.upgrade.level > 0);
-                this.t = Math.max(this.t - tdot, BigNumber.ZERO);
-                this.s += tdot;
+                this.s += this.t * (1 - BigNumber.E.pow(-dt));
+                this.t = this.t * BigNumber.E.pow(-dt);
                 this.laplaceCurrency += bonus.pow(0.1 + piExponent.level * 0.1) * this.getQS()* dt;
             }
             else {
                 this.t += this.getTDot(this.tdot.upgrade.level) * dt;
                 this.q = this.getC3(this.c3.upgrade.level) * (1 - BigNumber.E.pow(-1 * this.t));
-                this.currency += bonus * this.getLambdaS(this.lambdaS.upgrade.level) * this.getC1(this.c1.upgrade.level).pow(1 + qtExponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.lambda * this.q * dt;
+                this.currency += bonus * this.getLambda(this.lambda.upgrade.level).pow(1 + this.lambdaExponent.upgrade.level * 0.1) * this.getC1(this.c1.upgrade.level).pow(1 + qtExponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.q * dt;
             }
         }
 
@@ -246,7 +253,6 @@ var init = () => {
             return JSON.stringify({
                 s: `${this.s}`,
                 t: `${this.t}`,
-                lambda: `${this.lambda}`,
                 q: `${this.q}`,
                 currency: `${this.currency}`,
                 laplaceCurrency: `${this.laplaceCurrency}`
@@ -258,7 +264,6 @@ var init = () => {
             this.s = parseBigNumber(values.s);
             this.t = parseBigNumber(values.t);
             this.q = parseBigNumber(values.q)
-            this.lambda = parseBigNumber(values.lambda);
             this.currency = parseBigNumber(values.currency);
             this.laplaceCurrency = parseBigNumber(values.laplaceCurrency);
         }
@@ -270,7 +275,7 @@ var init = () => {
             let result = "\\begin{matrix}";
             if (!laplaceActive) {
                 result += "\\dot{\\rho} = c_{1} c_{2} " + (laplaceTransformUnlock.level > 0? "\\lambda_s" : "")  + " q_t" + qExponentText + "\\\\";
-                result += theory.latexSymbol + "=\\max\\rho^{" + tauExponent + "} \\\\";
+                result += "q_t = c_{3}(1-e^{-t})"
             }
             else {
                 result += "\\dot{\\Lambda} = \\Pi ^{" + piExponentText + "} q_{s}\\\\"
@@ -294,7 +299,7 @@ var init = () => {
             else {
                 // Default case
                 let result = "\\begin{matrix}"
-                result += "q_t = c_{3}(1-e^{-t})"
+                result += theory.latexSymbol + "=\\max\\rho^{" + tauExponent + "} \\\\";
                 result += "\\end{matrix}"
                 return result;
             }
@@ -311,7 +316,6 @@ var init = () => {
             this.q = BigNumber.ONE;
             this.t = BigNumber.ZERO;
             this.s = BigNumber.from((1 + 5 ** 0.5) / 2 - 1)
-            this.lambda = BigNumber.ONE;
             this.currency = BigNumber.ZERO;
             this.laplaceCurrency = BigNumber.ZERO;
             resetUpgrades(this.upgrades)
@@ -522,7 +526,7 @@ const basePubExp = 0.15
  * @param {String} symbol - LaTeX symbol to use in this formula instead of theory.latexSymbol
  * @returns {String} LaTeX representation of the publication multiplier formula
  */
-var getPublicationMultiplierFormula = (symbol) => "\\frac{" + symbol + "^{" + basePubExp / tauExponent + "}}{2}";
+var getPublicationMultiplierFormula = (symbol) => "\\Pi = \\frac{" + symbol + "^{" + basePubExp / tauExponent + "}}{2}";
 
 /**
  * @param {BigNumber} tau - Tau value at which the publication multiplier should be calculated
