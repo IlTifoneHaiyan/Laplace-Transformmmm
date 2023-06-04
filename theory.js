@@ -14,7 +14,7 @@ var authors = "Gaunter#1337";
 var version = "1.3.3";
 var currency;
 var laplaceActive = false;
-var activeSystemId = 1;
+var activeSystemId = 0;
 var systems = []
 var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase, assignmentUnlockUpgrade;
 
