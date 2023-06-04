@@ -95,9 +95,9 @@ class ltSim {
                 stepwisePowerSum: {default: true}
             }),
             new Variable({
-                cost: 1000,
-                costInc: 1e5,
-                varBase: 1000,
+                cost: 1e7,
+                costInc: 5e4,
+                varBase: 5,
             }),
             new Variable({
                 cost: 1e50,
@@ -112,7 +112,7 @@ class ltSim {
         this.pubRho = 0;
         this.laplaceCounter = 0;
         //qt qs challenges
-        this.milestones = [0, 0, 0];
+        this.milestones = [0, 0, 0, 0];
         this.result = [];
         this.pubMulti = 0;
         this.conditions = this.getBuyingConditions();
@@ -151,51 +151,33 @@ class ltSim {
         ];
     }
     getMilestoneTree() {
-        return [
-            [
-                [0, 0, 0],
-                [0, 1, 0],
-                [0, 2, 0],
-                [0, 3, 0],
-                [0, 4, 0],
-                [1, 4, 0],
-                [2, 4, 0],
-                [3, 4, 0],
-                [3, 4, 1],
-            ],
-            [
-                [0, 0, 0],
-                [1, 0, 0],
-                [2, 0, 0],
-                [3, 0, 0],
-                [3, 1, 0],
-                [3, 2, 0],
-                [3, 3, 0],
-                [3, 4, 0]
-                [3, 4, 1],
-            ],
-            [
-                [0, 0, 0],
-                [0, 1, 0],
-                [0, 2, 0],
-                [0, 3, 0],
-                [0, 4, 0],
-                [1, 4, 0],
-                [2, 4, 0],
-                [3, 4, 0],
-                [3, 4, 1],
-            ],
-        ];
+        let tree = [
+            ...new Array(3).fill([
+                [0, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 2, 0],
+                [1, 0, 2, 0],
+                [2, 0, 2, 0],
+                [3, 0, 2, 0],
+                [3, 1, 2, 0],
+                [3, 2, 2, 0],
+                [3, 3, 2, 0],
+                [3, 4, 2, 0],
+                [3, 4, 2, 1],
+            ])
+        ]
+
+        return tree;
     }
     getTotMult(val) {
         return Math.max(0, val * this.tauFactor * 10 - l10(2));
     }
     updateMilestones() {
-        const points = [0, 20, 40, 60, 80, 100, 120, 140, 160];
+        const points = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
         let stage = binarySearch(points, Math.max(this.lastPub, this.maxRho));
-        const max = [3, 4, 1];
-        const tPriority = [1, 2, 3];
-        const sPriority = [2, 1, 3];
+        const max = [3, 4, 2, 1];
+        const tPriority = [1, 2, 3, 4];
+        const sPriority = [3, 2, 1, 4];
         if (this.stratIndex == 1){
             let priority;
             let milestoneCount = stage;
@@ -204,7 +186,7 @@ class ltSim {
             else
                 priority = tPriority;
 
-            this.milestones = [0, 0, 0];
+            this.milestones = [0, 0, 0, 0];
             for (let i = 0; i < priority.length; i++) {
                 while (this.milestones[priority[i] - 1] < max[priority[i] - 1] && milestoneCount > 0) {
                     this.milestones[priority[i] - 1]++;
@@ -214,6 +196,12 @@ class ltSim {
         }
         else {
             this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
+        }
+
+        console.log((this.milestones[2]))
+        if (this.variables[6].varBase !== 10 * (10 ** this.milestones[2])) {
+            this.variables[6].varBase = 10 * (10 ** this.milestones[2]);
+            this.variables[6].reCalculate();
         }
     }
     simulate() {

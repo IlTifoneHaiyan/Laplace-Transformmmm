@@ -16,7 +16,7 @@ var currency;
 var laplaceActive = false;
 var activeSystemId = 0;
 var systems = []
-var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, assignmentUnlockUpgrade;
+var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase, assignmentUnlockUpgrade;
 
 var init = () => {
     currency = theory.createCurrency();
@@ -70,7 +70,13 @@ var init = () => {
         piExponent.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
     }
     {
-        challengeUnlock = theory.createMilestoneUpgrade(2, 1);
+        lambdaBase = theory.createMilestoneUpgrade(2, 2);
+        lambdaBase.getDescription = (_) => "Multiply λ base by 10";
+        lambdaBase.getInfo = (_) => "Multiply λ base by 10";
+        lambdaBase.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
+    }
+    {
+        challengeUnlock = theory.createMilestoneUpgrade(3, 1);
         challengeUnlock.getDescription = (_) => ("Unlock assignments");
         challengeUnlock.getInfo = (_) => ("Unlock assignments");
         challengeUnlock.canBeRefunded = () => false;
@@ -203,9 +209,9 @@ var init = () => {
 
             this.lambda = {
                 internalId: 7,
-                description: (_) => Utils.getMath("\\lambda = " + this.getLambda(this.lambda.upgrade.level)),
+                description: (_) => Utils.getMath("\\lambda = " + 5 * 10 ** (lambdaBase.level) + "{" + this.getLambda(this.lambda.upgrade.level) + "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e3, Math.log2(1e5)),
+                costModel: new ExponentialCost(1e7, Math.log2(5e4)),
                 laplaceUpgrade: true,
                 maxLevel: 40
             }
@@ -231,7 +237,7 @@ var init = () => {
         getTDot(level) { return 0.05 * Utils.getStepwisePowerSum(level, 2, 10, 0); }
         getC1S(level) { return BigNumber.E.pow(level * 0.5); }
         getC2S(level) { return Utils.getStepwisePowerSum(level, 2, 10, 0); }
-        getLambda(level) { return BigNumber.from(1e3).pow(level);}
+        getLambda(level) { return BigNumber.from(5 * 10 ** (lambdaBase.level)).pow(level);}
         getQS() { return (this.getC2S(this.c2s.upgrade.level).pow(2) * this.getC1S(this.c1s.upgrade.level) * this.s * (this.s + 1)); }
 
         tick(elapsedTime, multiplier) {
