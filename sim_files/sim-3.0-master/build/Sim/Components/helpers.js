@@ -13,6 +13,7 @@ export function getTauFactor(theory) {
         case "T6":
         case "T7":
         case "T8":
+        case "LT-c1":
             return 1;
         case "WSP":
         case "SL":

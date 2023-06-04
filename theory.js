@@ -11,10 +11,10 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.3";
+var version = "1.3.3";
 var currency;
 var laplaceActive = false;
-var activeSystemId = 0;
+var activeSystemId = 1;
 var systems = []
 var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase, assignmentUnlockUpgrade;
 
@@ -93,10 +93,10 @@ var init = () => {
         if (upgrade.maxLevel) temp.maxLevel = upgrade.maxLevel;
         // ensures purchases subtract from system currency also
         temp.boughtOrRefunded = (amount) => {
-            if(temp.level - amount > 0 && upgrade.laplaceUpgrade == false){
+            if(temp.level - amount >= 0 && upgrade.laplaceUpgrade == false){
                 system.currency -= upgrade.costModel.getSum(temp.level - amount, temp.level).min(system.currency);
             }
-            else if(temp.level - amount > 0 && upgrade.laplaceUpgrade == true){
+            else if(temp.level - amount >= 0 && upgrade.laplaceUpgrade == true){
                 system.laplaceCurrency -= upgrade.costModel.getSum(temp.level - amount, temp.level).min(system.laplaceCurrency);
             }
         }
@@ -209,7 +209,7 @@ var init = () => {
 
             this.lambda = {
                 internalId: 7,
-                description: (_) => Utils.getMath("\\lambda = " + 5 * 10 ** (lambdaBase.level) + "{" + this.getLambda(this.lambda.upgrade.level) + "}"),
+                description: (_) => Utils.getMath("\\lambda = " + 5 * 10 ** (lambdaBase.level) + "^{" + this.lambda.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
                 costModel: new ExponentialCost(1e7, Math.log2(5e4)),
                 laplaceUpgrade: true,
@@ -336,19 +336,22 @@ var init = () => {
             this.t = 0;
             this.realS = BigNumber.ONE;
             this.imagS = BigNumber.ZERO;
+            this.denominator = BigNumber.ONE;
             this.currency = BigNumber.ZERO;
             this.laplaceCurrency = BigNumber.ZERO;
-            this.maxRho = BigNumber.TEN.pow(100);
-            this.valueOfTText = Utils.getMath("t = " + this.t.toPrecision(3) + "\\pi")
+            this.maxRho = BigNumber.TEN.pow(0);
+            this.goal = BigNumber.from(1e20);
+            this.valueOfTText = () => Utils.getMath("t = " + this.t.toPrecision(3) + "\\pi")
             this.tSlider = ui.createSlider({
                 minimum: 0,
-                maximum: 2,
+                maximum: 64,
                 value: 0,
                 onValueChanged: () => {
-                    this.t = this.tSlider.value;
+                    this.t = Math.floor(this.tSlider.value) / 32;
                     Utils.getMath("t = " + this.t.toPrecision(3) + "\\pi");
                 }
             });
+            this.menu = this.createTSliderMenu()
 
             this.c1 = {
                 internalId: 1,
@@ -376,32 +379,63 @@ var init = () => {
 
         getC1(level) { return Utils.getStepwisePowerSum(level, 2, 10, 1); }
         getC2(level) { return BigNumber.TWO.pow(level); }
-
+        getRQs() { return this.denominator != BigNumber.ZERO? this.denominator.pow(-1) * (1 + this.realS) : BigNumber.ZERO}
+        getIQs() { return this.denominator != BigNumber.ZERO? this.denominator.pow(-1) * (-1 * this.imagS) : BigNumber.ZERO}
         tick(elapsedTime, _) {
             let dt = elapsedTime;
+            if (laplaceActive){
+                this.realS = parseFloat(Math.cos(2 * Math.PI * this.t).toFixed(3));
+                this.imagS = parseFloat(Math.sin(2 * Math.PI * this.t).toFixed(3));
+                this.denominator = BigNumber.from((1 + this.realS) ** 2 + this.imagS ** 2);
+                this.laplaceCurrency += this.getRQs() * this.getIQs();
+            }
+            else{
+                this.currency += this.getC1(this.c1.upgrade.level) * this.getC2(this.c2.upgrade.level) * BigNumber.from(Math.sin(Math.PI * this.t)) * dt
+            }
+
+            if (this.currency > this.maxRho){
+                this.maxRho = this.currency
+            }
         }
 
-        displayTSliderMenu() {
+        viewReward(){
             let menu = ui.createPopup({
-                title: "Value of t Adjustment",
+                title: "Reward",
                 content: ui.createStackLayout({
                     children: [
-                        ui.createLatexLabel(this.valueOfTText),
-                        this.tSlider
+                        ui.createLabel({
+                            text: "Unlock Laplace Transform automation options."
+                        })
                     ]
                 })
             })
             menu.show();
         }
 
+        createTSliderMenu() {
+            let menu = ui.createPopup({
+                title: "Value of t Adjustment",
+                content: ui.createStackLayout({
+                    children: [
+                        ui.createLatexLabel({
+                            text: this.valueOfTText
+                        }),
+                        this.tSlider
+                    ]
+                })
+            })
+            return menu;
+        }
+
         primaryEquation() {
             theory.primaryEquationHeight = 75;
             let result = "\\begin{matrix}";
             if (!laplaceActive) {
-                result += "\\dot{\\rho} = c_{1} c_{2} q_t";
+                result += "\\dot{\\rho} = c_{1} c_{2} q_t \\\\";
+                result += "q_t = \\sin(\\pi t) \\\\"
             }
             else {
-                result += "\\lambda_s = \\text{???} \\\\"
+                result += "\\dot{\\Lambda} = \\operatorname{Re}(q_s)\\operatorname{Im}(q_s) \\\\"
                 result += "q_s = \\frac{1}{s^2 + 1}"
             }
             result += "\\end{matrix}"
@@ -415,14 +449,16 @@ var init = () => {
                 // Equation while under Laplace transform
                 let result = "\\begin{matrix}"
                 result += "s = e^{i\\pi t}";
+                result += "\\\\ \\operatorname{Re}(q_s) = " + this.getRQs()
+                result += "\\\\ \\operatorname{Im}(q_s) = " + this.getIQs()
                 result += "\\end{matrix}"
                 return result
             }
             else {
                 // Default case
                 let result = "\\begin{matrix}"
-                result += "q_t = \\sin(t) \\\\"
-                result += "t = " + this.t.toPrecision(3) + "\\pi"
+                result += "\\sin(\\pi t) = " + BigNumber.from(Math.sin(Math.PI * this.t))
+                result += "\\\\ \\max \\rho = " + this.maxRho.toString()
                 result += "\\end{matrix}"
                 return result;
             }
@@ -451,6 +487,10 @@ var init = () => {
 
         processPublish(){
             resetUpgrades(this.upgrades);
+            this.t = 0;
+            this.tSlider.value = this.t;
+            this.currency = BigNumber.ZERO;
+            this.laplaceCurrency = BigNumber.ZERO;
         }
     }
     systems = [new MainSystem(), new ChallengeOne()]
@@ -546,7 +586,7 @@ var getPublicationMultiplier = (tau) => tau.pow(basePubExp / tauExponent) / 2
  * returned by this function.
  * @returns {BigNumber} Note: The result will be clamped to [0,∞)
  */
-var getTau = () => currency.value.pow(tauExponent);
+var getTau = () => currency.value > BigNumber.ZERO ? currency.value.pow(tauExponent) : BigNumber.ZERO;
 
 /**
  * Given a value of tau, returns the corresponding value in currency.
@@ -621,7 +661,7 @@ var laplaceButton = ui.createButton({
 );
 
 var challengeMenuButton = ui.createButton({
-    text: "View Assignments",
+    text: "Assignments",
     onClicked: () => {
         let challengeMenu = createChallengeMenu();
         challengeMenu.show();
@@ -631,6 +671,16 @@ var challengeMenuButton = ui.createButton({
 }
 );
 
+var handInButton = ui.createButton({
+    text: "Hand-In",
+    onClicked: () => { 
+        let menu = challengeCompletionMenu();
+        menu.show();
+    },
+    isVisible: () => activeSystemId != 0,
+    row:1,
+    column:1
+})
 var startChallenge = (challengeId) => {
     currency.value = BigNumber.ZERO;
     laplaceCurrency.value = BigNumber.ZERO;
@@ -642,6 +692,21 @@ var startChallenge = (challengeId) => {
     theory.invalidateTertiaryEquation();
 }
 
+var createLaplaceAutomationMenu = () => {
+    let menu = ui.createPopup({
+        title: "Automated Laplace Transform Settings",
+        content: ui.createStackLayout({
+            children: [
+                ui.createLabel({
+                    text: "Not yet implemented..."
+                })
+            ]
+        })
+    })
+
+    menu.show();
+}
+
 var createChallengeMenu = () => {
     let menu = ui.createPopup({
         title: "Assignments (for now, freely accessible)",
@@ -649,13 +714,14 @@ var createChallengeMenu = () => {
 
     challengeGrid = []
     for (let i = 1; i < systems.length; i++){
-        if (i <= assignmentUnlockUpgrade.level){
+        if (true){ // i <= assignmentUnlockUpgrade.level){
             challengeGrid.push(
                 ui.createGrid({
                     columnDefinitions: ["20*", "15*", "auto"],
                     children: [
                         ui.createLatexLabel({text: Utils.getMath("\\begin{matrix} \\text{Assignment "+ i + "} \\\\ \\text{max } \\rho = " + systems[i].maxRho.toString() + "\\end{matrix}"), horizontalOptions: LayoutOptions.CENTER, verticalOptions: LayoutOptions.CENTER}),
-                        ui.createButton({text: "Start Challenge", onClicked: () => { startChallenge(i); menu.hide();}, row: 0, column: 1 }), 
+                        ui.createButton({text: "Start", onClicked: () => { startChallenge(i); menu.hide();}, row: 0, column: 1 }),
+                        ui.createButton({text: "Reward", onClicked: () => { systems[i].viewReward()}, row: 0, column: 2}), 
                     ]
                 })
             )
@@ -672,16 +738,6 @@ var createChallengeMenu = () => {
         }
     }
 
-    if (activeSystemId != 0){
-        challengeGrid.push(ui.createButton({
-            text: "Exit Challenge",
-            onClicked: () => {
-                startChallenge(0);
-                menu.hide();
-            }
-        }))
-    }
-
     menu.content = ui.createStackLayout({
         children: challengeGrid
     })
@@ -689,14 +745,102 @@ var createChallengeMenu = () => {
     return menu;
 }
 
-var goToPreviousStage = () => {
-    // let challengeMenu = createChallengeMenu();
-    // challengeMenu.show();
+var challengeCompletionMenu = () => {
+    let menu = ui.createPopup({
+        title: "Hand-In Assignment",
+    })
+    
+    menu.content = ui.createStackLayout({
+        children: [
+            ui.createGrid({
+                columnDefinitions: ["20*", "15*", "auto"],
+                children: [
+                    ui.createLatexLabel({
+                        text: Utils.getMath("\\text{Goal: }" + systems[activeSystemId].goal + "\\rho"),
+                        row:0,
+                        column:0,
+                    }),
+                    ui.createLatexLabel({
+                        text: () => Utils.getMath("\\text{Current: }" + systems[activeSystemId].maxRho + "\\rho"),
+                        row:1,
+                        column:0,
+                    }),
+                    ui.createButton({
+                        text: () => systems[activeSystemId].maxRho >= systems[activeSystemId].goal? "Complete" : "Exit",
+                        onClicked: () => {
+                            startChallenge(0);
+                            menu.hide();
+                        },
+                        row:2,
+                        column:0
+                    })
+                ]
+            })
+        ]
+    })
+    return menu;
+}
+
+var getImageSize = (width) => {
+    if(width >= 1080)
+      return 72;
+    if(width >= 720)
+      return 54;
+    if(width >= 360)
+      return 36;
+    return 30;
+}
+  
+var canResetStage = () => activeSystemId != 0;
+var resetStage = () => systems[activeSystemId].processPublish();
+
+var getEquationOverlay = () => {
+    return ui.createGrid({
+      columnDefinitions: ["1*", "3*", "1*"],
+      columnSpacing: 0,
+      children: [
+        ui.createImage({
+            useTint: true,
+            source: ImageSource.SETTINGS,
+            row:0,
+            column:0,
+            widthRequest: getImageSize(ui.screenWidth),
+            heightRequest: getImageSize(ui.screenWidth), 
+            horizontalOptions: LayoutOptions.START,
+            verticalOptions: LayoutOptions.START,   
+            aspect: Aspect.ASPECT_FILL,
+            onTouched: (e) => {
+                if (e.type.isReleased()) {
+                  log("Hello!")
+                  if (activeSystemId == 1){
+                    systems[1].menu.show();
+                  }
+                  else {
+                    createLaplaceAutomationMenu();
+                  }
+                }
+              },
+            isVisible: () => activeSystemId == 0 || activeSystemId == 1    
+        }),
+        ui.createFrame({
+            isVisible: () => activeSystemId != 0,
+            row: 0,
+            column: 1,
+            horizontalOptions: LayoutOptions.FILL_AND_EXPAND,
+            verticalOptions: LayoutOptions.START,
+            children: [
+              ui.createProgressBar({
+                progress: () => activeSystemId != 0 ? Math.min((systems[activeSystemId].maxRho.log10() / systems[activeSystemId].goal.log10()).toNumber(), 1) : 0
+            }),
+            ],
+          }),
+        ]
+      })
 }
 
 var getCurrencyBarDelegate = () => {
     // to be restricted in final version
-    challengeMenuButton.isVisible = true // () => challengeUnlock.level > 0;
+    challengeMenuButton.isVisible = () => activeSystemId == 0 && true // () => challengeUnlock.level > 0;
     laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
     currencyBar = ui.createGrid({
         columnDefinitions: ["20*", "30*", "auto"],
@@ -724,7 +868,8 @@ var getCurrencyBarDelegate = () => {
                 isVisible: () => laplaceTransformUnlock.level > 0
             }),
             laplaceButton,
-            challengeMenuButton
+            challengeMenuButton,
+            handInButton
         ],
     });
     return currencyBar;

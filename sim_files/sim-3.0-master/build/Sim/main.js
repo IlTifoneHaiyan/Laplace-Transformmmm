@@ -415,6 +415,9 @@ function getStrats(theory, rho, type) {
         case "LT-main":
             conditions = [true]
             break;
+        case "LT-c1":
+            conditions = [true]
+            break;
     }
     let requirements = [];
     switch (theory) {
