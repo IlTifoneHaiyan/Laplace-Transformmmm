@@ -25,6 +25,7 @@ import ef from "../Theories/CTs/EF.js";
 import csr2 from "../Theories/CTs/CSR2.js";
 import rz from "../Theories/Unofficial-CTs/RZ.js";
 import lt from "../Theories/Unofficial-CTs/LT-main.js"
+import ltc1 from "../Theories/Unofficial-CTs/LT-c1.js";
 import { parseCurrencyValue, parseModeInput } from "./Components/parsers.js";
 import { getIndexFromTheory, getTauFactor, getTheoryFromIndex } from "./Components/helpers.js";
 const output = qs(".output");
@@ -159,6 +160,8 @@ function singleSim(data) {
                 return yield rz(sendData);
             case "LT-main":
                 return yield lt(sendData);
+            case "LT-c1":
+                return yield ltc1(sendData)
         }
         throw `Theory ${data.theory} is not defined in singleSim() function. Please contact the author of the sim.`;
     });
@@ -562,6 +565,10 @@ function getStrats(theory, rho, type) {
         case "LT-main":
             requirements = [true]
             break;
+        case "LT-c1S":
+            requirements = [true]
+            break;    
+        
     }
     if (conditions.length === 0)
         throw "No strats found";

@@ -12,7 +12,7 @@ import { add, createResult, l10, subtract, ZERO } from "../../Utils/simHelpers.j
 import { findIndex, sleep } from "../../Utils/helperFunctions.js";
 import Variable from "../../Utils/variable.js";
 import { getTauFactor } from "../../Sim/Components/helpers.js";
-export default function lt(data) {
+export default function ltc1(data) {
     return __awaiter(this, void 0, void 0, function* () {
         let sim = new ltSim(data);
         let res = yield sim.simulate();
@@ -38,7 +38,7 @@ class ltSim {
         var _a;
         this.stratIndex = findIndex(data.strats, data.strat);
         this.strat = data.strat;
-        this.theory = "LT-main";
+        this.theory = "LT-c1";
         this.tauFactor = getTauFactor(this.theory);
         this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
         this.recovery = (_a = data.recovery) !== null && _a !== void 0 ? _a : { value: 0, time: 0, recoveryTime: false };
@@ -53,10 +53,9 @@ class ltSim {
         this.timer = 0;
 
         this.currencies = [0,0];
-        this.cycleTimes = [[30*60, 30*60] , [2*60, 2*60], [2*60, 240*60]];
+        this.cycleTimes = [[1 * 60, 5 * 60]];
         this.maxRho = 0;
         this.t_var = 0;
-        this.s = l10((1 + 5 ** 0.5) / 2 - 1);
         this.laplaceActive = false;
         this.variables = [
             new Variable({
@@ -70,39 +69,52 @@ class ltSim {
                 costInc: 9,
                 varBase: 2
             }),
+            new Variable({
+                cost: 10000,
+                costInc: 22,
+                varBase: 1.61
+            }),
+            new Variable({
+                cost: 2000,
+                costInc: 10,
+                varBase: 2
+            }),
+            new Variable({
+                cost: 500,
+                costInc: 4,
+                varBase: 1.5
+            }),
+            new Variable({
+                cost: 10,
+                costInc: 10,
+                varBase: 3
+            }),
         ];
-        this.varNames = ['c1', 'c2'];
+        this.varNames = ['c1', 'c2', 'c3', 'c1s', 'c2s', 'lambda'];
         this.boughtVars = [];
         this.tauH = 0;
         this.maxTauH = 0;
         this.pubT = 0;
         this.pubRho = 0;
         this.laplaceCounter = 0;
-        //qt qs challenges
         this.result = [];
         this.pubMulti = 0;
         this.milestones = [0]
         this.conditions = this.getBuyingConditions();
+        console.log(this.conditions[this.stratIndex])
         this.milestoneConditions = this.getMilestoneConditions();
         this.milestoneTree = this.getMilestoneTree();
         this.updateMilestones();
+
+        this.r = 0;
+        this.i = 0;
     }
     getBuyingConditions() {
         let conditions = [
-            Array(this.variables.length).fill(true),
-            [
-                () => this.variables[0].cost + l10(5 + 0.5 * (this.variables[0].lvl % 10) + 0.0001) < Math.min(this.variables[1].cost, this.variables[2].cost),
-                true,
-                true,
-                () => this.variables[3].cost + 1 + l10(5 + 0.5 * (this.variables[3].lvl % 10) + 0.0001) < Math.min(this.variables[1].cost, this.variables[2].cost),
-                true,
-                true,
-                true,
-                true
-            ],
-            Array(this.variables.length).fill(true),
+             new Array(this.variables.length).fill(true),
         ];
         conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
+        console.log(conditions)
         return conditions;
     }
     getMilestoneConditions() {
@@ -110,10 +122,8 @@ class ltSim {
             () => this.laplaceActive == false,
             () => this.laplaceActive == false,
             () => this.laplaceActive == false,
-            () => this.laplaceActive == false,
             () => this.laplaceActive == true,
             () => this.laplaceActive == true,
-            () => this.laplaceActive == true && this.variables[6].lvl < 40,
             () => this.laplaceActive == true,
         ];
     }
@@ -146,10 +156,13 @@ class ltSim {
                     this.updateMilestones();
                 this.curMult = Math.pow(10, this.getTotMult(this.maxRho) - this.totMult);
                 this.buyVariables();
-                pubCondition = currencies[0].value == 10;
+                pubCondition = this.maxRho >= 20;
                 this.ticks++;
             }
             this.pubMulti = Math.pow(10, this.getTotMult(this.pubRho) - this.totMult);
+            this.maxTauH = 69;
+            this.pubT = this.t;
+            this.pubRho = this.maxRho;
             this.result = createResult(this, "");
             while(this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
                 this.boughtVars.pop();
@@ -162,46 +175,31 @@ class ltSim {
         this.laplaceActive = !this.laplaceActive;
         this.laplaceCounter++;
     }
-    getQS() { return this.variables[5].value * 2 + this.variables[4].value / 2 + this.s + add(this.s, 0); }
     tick() {
         let cap = this.laplaceActive ? this.cycleTimes[this.stratIndex][1] : this.cycleTimes[this.stratIndex][0];
-        if(this.maxRho > 4 && this.timer >= cap)
+        if(this.timer >= cap)
         {
             this.timer = 0;
             this.transform();
         }
         let ldt = l10(this.dt);
-        let bonus = this.totMult;
+        let bonus = 0; //this.totMult;
         if(this.laplaceActive) {
-            if(this.variables[5].lvl > 0)
-            {
-                this.s = add(this.s, this.t_var);
-                this.t_var = ZERO;
-                this.currencies[1] = add(this.currencies[1], bonus * (0.1 + 0.1 * this.milestones[1]) + this.getQS() + ldt);
-1            }
+            let  rq = this.variables[3].value + l10(0.5);
+            let iq = this.variables[4].value - l10(Math.abs(1.1 - this.variables[4].level % 2 == 0 ? 0.94 : 1.21));
+            this.r = add(this.r, rq + ldt);
+            this.i = add(this.i, iq + ldt);
+            this.currencies[1] = add(this.currencies[1], this.variables[2].value + this.r + this.i + ldt)
         }
-        else {
-            this.t_var = add(this.t_var, this.variables[3].value + l10(0.05) + ldt);
-            let q = this.variables[2].value;
-            if(this.t_var < 2)
-                q += l10(1 - Math.exp(-Math.pow(10, this.t_var)));
-            this.currencies[0] = add(this.currencies[0], bonus + this.variables[0].value * (1 + 0.05 * this.milestones[0]) + this.variables[1].value + this.variables[6].value * (1 + 0.1 * this.variables[7].lvl) + q + ldt);
+        else { 
+            this.currencies[0] = add(this.currencies[0], bonus + this.variables[0].value + this.variables[1].value + this.variables[5].value);
         }
         this.timer += this.dt / 1.5;
         this.t += this.dt / 1.5;
         this.dt *= this.ddt;
-        if (this.maxRho < this.recovery.value)
-            this.recovery.time = this.t;
-        this.tauH = (this.maxRho - this.lastPub) / (this.t / 3600);
-        this.effectiveTauH = (this.maxRho - this.lastPub) / (this.effectiveT / 3600);
-        if (this.maxTauH < this.tauH || this.maxRho >= this.cap[0] - this.cap[1] || this.pubRho < this.lastPub || this.pubRho < 7 || global.forcedPubTime !== Infinity) {
-            this.maxTauH = this.tauH;
-            this.pubT = this.t;
-            this.pubRho = this.maxRho;
-        }
     }
     buyVariables() {
-        const currencyIndices = [0, 0, 0, 0, 1, 1, 1, 1];
+        const currencyIndices = [0, 0, 0, 1, 1, 1];
         for (let i = this.variables.length - 1; i >= 0; i--)
             while (true) {
                 if (this.currencies[currencyIndices[i]] > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
@@ -209,7 +207,7 @@ class ltSim {
                     if(this.maxRho + 5 > this.lastPub)
                     {
                         this.boughtVars.push({
-                            variable: this.laplaceActive,
+                            variable: this.varNames[i],
                             level: this.variables[i].lvl + 1,
                             cost: this.variables[i].cost,
                             timeStamp: this.t

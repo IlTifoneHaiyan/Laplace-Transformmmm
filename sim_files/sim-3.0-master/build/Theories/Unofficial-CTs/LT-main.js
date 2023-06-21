@@ -226,7 +226,6 @@ class ltSim {
             this.result = createResult(this, "");
             while(this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
                 this.boughtVars.pop();
-            console.log(this.currencies)
             global.varBuy.push([this.result[7], this.boughtVars]);
             return this.result;
         });
