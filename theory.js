@@ -10,7 +10,7 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.3.3";
+var version = "1.3.4";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 0;
@@ -342,6 +342,7 @@ var init = () => {
             this.laplaceCurrency = BigNumber.ZERO;
             this.maxRho = BigNumber.TEN.pow(0);
             this.goal = BigNumber.from(1e20);
+            this.isPaused = false;
             this.valueOfTText = () => Utils.getMath("t = " + this.t.toPrecision(3) + "\\pi")
             this.tSlider = ui.createSlider({
                 minimum: 0,
@@ -352,42 +353,46 @@ var init = () => {
                     Utils.getMath("t = " + this.t.toPrecision(3) + "\\pi");
                 }
             });
+            this.pauseSwitch = ui.createSwitch({
+                isToggled: this.isPaused,
+                onToggled: () => this.isPaused = !this.isPaused
+            })
             this.menu = this.createTSliderMenu()
 
             this.c1 = {
                 internalId: 1,
-                description: (_) => Utils.getMath("c_1=" + this.getC1(this.c1.upgrade.level)),
-                info: (amount) => Utils.getMathTo("c_1=" + this.getC1(this.c1.upgrade.level), "c_1=" + this.getC1(this.c1.upgrade.level + amount)),
+                description: (_) => Utils.getMath("c_1 =" + this.getC1(this.c1.upgrade.level)),
+                info: (amount) => Utils.getMathTo("c_1 =" + this.getC1(this.c1.upgrade.level), "c_1=" + this.getC1(this.c1.upgrade.level + amount)),
                 costModel: new ExponentialCost(10, Math.log2(1.8)),
                 laplaceUpgrade: false,
             }
 
             this.c2 = {
                 internalId: 2,
-                description: (_) => Utils.getMath("c_{2}= 2^{" + this.c2.upgrade.level + "}"),
-                info: (amount) => Utils.getMathTo("c_2=" + this.getC2(this.c2.upgrade.level), "c_{2}=" + this.getC2(this.c2.upgrade.level + amount)),
+                description: (_) => Utils.getMath("c_{2} = 2^{" + this.c2.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_2 =" + this.getC2(this.c2.upgrade.level), "c_{2}=" + this.getC2(this.c2.upgrade.level + amount)),
                 costModel: new ExponentialCost(750, Math.log2(9)),
                 laplaceUpgrade: false
             }
             this.c3 = {
                 internalId: 3,
-                description: (_) => Utils.getMath("c_{3}= \\phi^{" + this.c3.upgrade.level + "}"),
-                info: (amount) => Utils.getMathTo("c_3=" + this.getC3(this.c3.upgrade.level), "c_{3}=" + this.getC3(this.c3.upgrade.level + amount)),
+                description: (_) => Utils.getMath("c_{3} = \\phi^{" + this.c3.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_3 =" + this.getC3(this.c3.upgrade.level), "c_{3}=" + this.getC3(this.c3.upgrade.level + amount)),
                 costModel: new ExponentialCost(10000, Math.log2(22)),
                 laplaceUpgrade: false
             }
             this.c1s = {
                 internalId: 4,
-                description: (_) => Utils.getMath("c_{1s}= 2^{" + this.c1s.upgrade.level + "}"),
-                info: (amount) => Utils.getMathTo("c_{1s}=" + this.getC1S(this.c1s.upgrade.level), "c_{1s}=" + this.getC1S(this.c1s.upgrade.level + amount)),
+                description: (_) => Utils.getMath("c_{1s} = 2^{" + this.c1s.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_{1s} =" + this.getC1S(this.c1s.upgrade.level), "c_{1s}=" + this.getC1S(this.c1s.upgrade.level + amount)),
                 costModel: new ExponentialCost(2000, Math.log2(10)),
                 laplaceUpgrade: true
             }
 
             this.c2s = {
                 internalId: 5,
-                description: (_) => Utils.getMath("c_{2s}= (-1.5)^{" + this.c2s.upgrade.level + "}"),
-                info: (amount) => Utils.getMathTo("c_{2s}=" + this.getC2S(this.c2s.upgrade.level), "c_{2s}=" + this.getC2S(this.c2s.upgrade.level + amount)),
+                description: (_) => Utils.getMath("c_{2s} = (-1.5)^{" + this.c2s.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_{2s} =" + this.getC2S(this.c2s.upgrade.level), "c_{2s}=" + this.getC2S(this.c2s.upgrade.level + amount)),
                 costModel: new ExponentialCost(500, Math.log2(4)),
                 laplaceUpgrade: true    
             }
@@ -395,8 +400,8 @@ var init = () => {
             this.lambda = {
                 internalId: 6,
                 description: (_) => Utils.getMath("\\lambda = (-3)^{" + this.lambda.upgrade.level + "}"),
-                info: (amount) => Utils.getMathTo("\\lambda=" + this.getLambda(this.c2s.upgrade.level), 
-                "\\lambda" + this.getLambda(this.c2s.upgrade.level + amount)),
+                info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.c2s.upgrade.level), 
+                "\\lambda = " + this.getLambda(this.c2s.upgrade.level + amount)),
                 costModel: new ExponentialCost(10, Math.log2(10)),
                 laplaceUpgrade: true    
             }
@@ -419,7 +424,7 @@ var init = () => {
         getIQs() { return this.denominator != BigNumber.ZERO? this.denominator.pow(-1) * (-1 * this.imagS) : BigNumber.ZERO}
         tick(elapsedTime, _) {
             let dt = elapsedTime;
-            if (laplaceActive){
+            if (laplaceActive && !this.isPaused){
                 this.realS = parseFloat(Math.cos(2 * Math.PI * this.t).toFixed(3));
                 this.imagS = parseFloat(Math.sin(2 * Math.PI * this.t).toFixed(3));
                 this.denominator = BigNumber.from((1 + this.realS) ** 2 + this.imagS ** 2);
@@ -427,11 +432,11 @@ var init = () => {
                 this.I += this.getC2S(this.c2s.upgrade.level) / (1.1 - this.getIQs()) * dt;
                 this.laplaceCurrency += this.R * this.I * this.getC3(this.c3.upgrade.level) * dt;
             }
-            else{
+            else if (!this.isPaused){
                 this.currency += this.getC1(this.c1.upgrade.level) * this.getC2(this.c2.upgrade.level) 
                 * this.getLambda(this.lambda.upgrade.level) * BigNumber.from(Math.sin(Math.PI * this.t)) * dt
             }
-
+            // else do nothing
             if (this.currency > this.maxRho){
                 this.maxRho = this.currency
             }
@@ -459,7 +464,11 @@ var init = () => {
                         ui.createLatexLabel({
                             text: this.valueOfTText
                         }),
-                        this.tSlider
+                        this.tSlider,
+                        ui.createLabel({
+                            text: "Pause Challenge"
+                        }),
+                        this.pauseSwitch
                     ]
                 })
             })
@@ -516,6 +525,7 @@ var init = () => {
                 t: `${this.t}`,
                 R: `${this.R}`,
                 I: `${this.I}`,
+                isPaused: `${this.isPaused}`,
                 currency: `${this.currency}`,
                 maxRho: `${this.maxRho}`
             })
@@ -527,6 +537,8 @@ var init = () => {
             this.tSlider.value = this.t;
             this.R = parseBigNumber(values.R);
             this.I = parseBigNumber(values.I);
+            this.isPaused = values.isPaused == "true";
+            this.pauseSwitch.isToggled = values.isPaused == "true";
             this.currency = parseBigNumber(values.currency);
             this.maxRho = parseBigNumber(values.maxRho);
         }
