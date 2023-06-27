@@ -1,6 +1,8 @@
 {
-    "theories": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "WSP", "SL", "EF", "CSR2", "RZ", "LT-main"],
+    "theories": ["LT-main", "LT-c1", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "WSP", "SL", "EF", "CSR2", "RZ"],
     "strats": [
+        ["LT-main-30min", "LT-mainMS-2min", "LT-main-idle"],
+        ["LT-c1"],
         ["T1", "T1C34", "T1C4", "T1Ratio", "T1SolarXLII"],
         ["T2", "T2mc", "T2ms", "T2qs"],
         [
@@ -29,8 +31,7 @@
         ["SL", "SLStopA", "SLStopAd", "SLMS", "SLMSd"],
         ["EF", "EFsnax", "EFd", "EFAI"],
         ["CSR2", "CSR2d", "CSR2XL"],
-        ["RZ", "RZd", "RZdBH"],
-        ["LT-main-30min", "LT-mainMS-2min", "LT-main-idle"]
+        ["RZ", "RZd", "RZdBH"]
     ],
     "modes": ["All", "Single sim", "Chain", "Steps", "Amount", "Time", "Time diff."],
     "modeInputDescriptions": ["", "", "", "Step length: ", "Amount of pubs (Chain): ", "Total Time: "],

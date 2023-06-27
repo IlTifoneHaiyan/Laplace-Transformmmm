@@ -1,0 +1,10 @@
+{
+    "configurations": [
+        {
+            "type": "msedge",
+            "name": "http://localhost:5500/sim_files/sim-3.0-master/",
+            "request": "launch",
+            "url": "http://localhost:5500/sim_files/sim-3.0-master/"
+        }
+    ]
+}
