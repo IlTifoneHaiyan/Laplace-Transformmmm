@@ -941,7 +941,7 @@ var getEquationOverlay = () => {
                   }
                 }
               },
-            isVisible: () => activeSystemId == 0 || activeSystemId == 1    
+            isVisible: () => activeSystemId == 0 && systems[1].maxRho >= BigNumber.from(1e20) || activeSystemId == 1    
         }),
         ui.createFrame({
             isVisible: () => activeSystemId != 0,
