@@ -10,12 +10,38 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.3.4";
+var version = "1.3.5";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 0;
 var systems = []
-var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase, assignmentUnlockUpgrade;
+var timer = 0;
+var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase;
+var tDomainTime = 1;
+var sDomainTime = 1;
+var automationEnabled = false;
+
+// UI Sliders
+var tDomainSlider = ui.createSlider({
+    minimum: 1,
+    maximum: 60,
+    onValueChanged: () => {
+        tDomainTime = Math.round(tDomainSlider.value)
+    }
+}); 
+var sDomainSlider = ui.createSlider({
+    minimum: 1,
+    maximum: 60,
+    onValueChanged: () => {
+        sDomainTime = Math.round(sDomainSlider.value)
+    }
+});
+var autoLaplaceToggle = ui.createSwitch({
+    onToggled: () => {
+        automationEnabled = !automationEnabled;
+        timer = 0;
+    }
+});
 
 var init = () => {
     currency = theory.createCurrency();
@@ -34,23 +60,6 @@ var init = () => {
         laplaceTransformUnlock.maxLevel = 1;
         laplaceTransformUnlock.getDescription = (_) => Localization.getUpgradeUnlockDesc("\\text{Laplace transformation}");
         laplaceTransformUnlock.getInfo = (_) => Utils.getMath("\\mathcal{L}\\{f(t)\\} = \\int_{0}^{\\infty}f(t)e^{-st}dt");
-    }
-
-    {
-        let unlockCosts = new CustomCost((level) => {
-            let exponent = 1000
-            switch(level + 1) {
-                case 1: exponent = 0; break;
-                case 2: exponent = 0; break;
-            }
-
-            return BigNumber.TEN.pow(exponent)
-        })   
-        assignmentUnlockUpgrade = theory.createPermanentUpgrade(5, currency, unlockCosts);
-        assignmentUnlockUpgrade.maxLevel = 1;
-        assignmentUnlockUpgrade.getDescription = (_) => Localization.getUpgradeUnlockDesc("\\text{assignment " + (assignmentUnlockUpgrade.level + 1) + "}");
-        assignmentUnlockUpgrade.getInfo = (_) => Localization.getUpgradeUnlockDesc("\\text{assignment " + (assignmentUnlockUpgrade.level + 1) + "}");
-        assignmentUnlockUpgrade.isAvailable = false;
     }
 
     theory.setMilestoneCost(new CustomCost(total => BigNumber.from(getCustomCost(total))));
@@ -208,7 +217,7 @@ var init = () => {
 
             this.lambda = {
                 internalId: 7,
-                description: (_) => Utils.getMath("\\lambda = " + 5 * 10 ** (lambdaBase.level) + "^{" + this.lambda.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\lambda = " + 5 * 10 ** (lambdaBase.level) + "^{" + (this.lambda.upgrade.level + this.lambdaExponent.upgrade.level * 0.1)+ "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
                 costModel: new ExponentialCost(1e7, Math.log2(5e4)),
                 laplaceUpgrade: true,
@@ -242,6 +251,18 @@ var init = () => {
         tick(elapsedTime, multiplier) {
             let dt = BigNumber.from(elapsedTime * multiplier);
             let bonus = theory.publicationMultiplier;
+            if(automationEnabled){
+                timer += elapsedTime;
+                if(laplaceActive && timer / 60 >= sDomainTime){
+                    laplaceActive = false;
+                    timer = 0;
+                }
+                else if(!laplaceActive && timer / 60 >= tDomainTime){
+                    laplaceActive = true;
+                    timer = 0;
+                }
+            }
+        
             if (laplaceActive) {
                 this.s += this.t * (1 - BigNumber.E.pow(-dt));
                 this.t = this.t * BigNumber.E.pow(-dt);
@@ -266,11 +287,11 @@ var init = () => {
 
         setInternalState(state) {
             let values = JSON.parse(state);
-            this.s = parseBigNumber(values.s);
-            this.t = parseBigNumber(values.t);
-            this.q = parseBigNumber(values.q)
-            this.currency = parseBigNumber(values.currency);
-            this.laplaceCurrency = parseBigNumber(values.laplaceCurrency);
+            if(values.s) this.s = parseBigNumber(values.s);
+            if(values.t) this.t = parseBigNumber(values.t);
+            if(values.q) this.q = parseBigNumber(values.q)
+            if(values.currency) this.currency = parseBigNumber(values.currency);
+            if(values.laplaceCurrency) this.laplaceCurrency = parseBigNumber(values.laplaceCurrency);
         }
 
         primaryEquation() {
@@ -333,6 +354,7 @@ var init = () => {
             super();
             this.systemId = 1;
             this.t = 0;
+            this.isUnlocked = false;
             this.R = BigNumber.ZERO,
             this.I = BigNumber.ZERO,
             this.realS = BigNumber.ONE;
@@ -414,6 +436,25 @@ var init = () => {
             }
         }
 
+        unlock(){
+            if(systems[0].laplaceCurrency >= BigNumber.from(1e40)){
+                this.isUnlocked = true;
+            }
+            else{
+                let menu = ui.createPopup({
+                    title: "Unlock Condition",
+                    content: ui.createStackLayout({
+                        children: [
+                            ui.createLatexLabel({
+                                text: Utils.getMath("\\Lambda > 1e40")
+                            }),
+                        ]
+                    })
+                });
+                    menu.show();
+            }
+        }
+
         getC1(level) { return Utils.getStepwisePowerSum(level, 2, 10, 1); }
         getC2(level) { return BigNumber.TWO.pow(level); }
         getC3(level) { return BigNumber.from(1.618033988749894).pow(level); }
@@ -471,7 +512,8 @@ var init = () => {
                         this.pauseSwitch
                     ]
                 })
-            })
+            });
+
             return menu;
         }
 
@@ -527,20 +569,20 @@ var init = () => {
                 I: `${this.I}`,
                 isPaused: `${this.isPaused}`,
                 currency: `${this.currency}`,
+                laplaceCurrency: `${this.laplaceCurrency}`,
                 maxRho: `${this.maxRho}`
             })
         }
 
         setInternalState(state) {
             let values = JSON.parse(state);
-            this.t = parseFloat(values.t);
-            this.tSlider.value = this.t;
-            this.R = parseBigNumber(values.R);
-            this.I = parseBigNumber(values.I);
-            this.isPaused = values.isPaused == "true";
-            this.pauseSwitch.isToggled = values.isPaused == "true";
-            this.currency = parseBigNumber(values.currency);
-            this.maxRho = parseBigNumber(values.maxRho);
+            if(values.t) { this.t = parseFloat(values.t); this.tSlider.value = this.t; }
+            if(values.R) this.R = parseBigNumber(values.R);
+            if(values.I) this.I = parseBigNumber(values.I);
+            if(values.isPaused) { this.isPaused = values.isPaused == "true"; this.pauseSwitch.isToggled = values.isPaused == "true"; }
+            if(values.currency) this.currency = parseBigNumber(values.currency);
+            if(values.laplaceCurrency) this.laplaceCurrency = parseBigNumber(values.laplaceCurrency);
+            if(values.maxRho) this.maxRho = parseBigNumber(values.maxRho);
         }
 
         processPublish(){
@@ -577,7 +619,6 @@ var updateAvailability = () => {
     }
 
     challengeUnlock.isAvailable = qtExponent.level >= 3 && piExponent.level >= 3;
-    assignmentUnlockUpgrade.isAvailable = challengeUnlock.level > 0;
 }
 
 /**
@@ -686,7 +727,11 @@ var getInternalState = () => {
     return JSON.stringify({
         systems: state,
         laplaceActive: laplaceActive,
-        activeSystemId: activeSystemId
+        activeSystemId: activeSystemId,
+        timer: timer,
+        tDomainTime: tDomainTime,
+        sDomainTime: sDomainTime,
+        automationEnabled: automationEnabled
     })
 }
 
@@ -701,9 +746,12 @@ var setInternalState = (state) => {
         systems[id].setInternalState(values.systems[id])
     }
 
-    activeSystemId = parseInt(values.activeSystemId);
-    laplaceActive = values.laplaceActive;
-    laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"
+    if(values.activeSystemId) activeSystemId = parseInt(values.activeSystemId);
+    if(values.laplaceActive) { laplaceActive = values.laplaceActive; laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"; }
+    if(values.timer) timer = parseFloat(values.timer);
+    if(values.tDomainTime) { tDomainTime = parseInt(state.tDomainTime); tDomainSlider.value = tDomainTime; }
+    if(values.sDomainTime) { sDomainTime = parseInt(state.sDomainTime); sDomainSlider.value = sDomainTime; }
+    if(values.automationEnabled) { automationEnabled = state.automationEnabled == "true"; autoLaplaceToggle.isToggled = automationEnabled; }
 };
 
 // UI
@@ -741,6 +789,8 @@ var handInButton = ui.createButton({
     row:1,
     column:1
 })
+
+
 var startChallenge = (challengeId) => {
     currency.value = BigNumber.ZERO;
     laplaceCurrency.value = BigNumber.ZERO;
@@ -752,36 +802,47 @@ var startChallenge = (challengeId) => {
     theory.invalidateTertiaryEquation();
 }
 
-var createLaplaceAutomationMenu = () => {
-    let menu = ui.createPopup({
+var laplaceAutomationMenu = ui.createPopup({
         title: "Automated Laplace Transform Settings",
         content: ui.createStackLayout({
             children: [
                 ui.createLabel({
-                    text: "Not yet implemented..."
-                })
+                    text: "Time in t domain"
+                }),
+                ui.createLatexLabel({
+                    text: () => Utils.getMath(tDomainTime + " \\text{ mins}")
+                }),
+                tDomainSlider,
+                ui.createLabel({
+                    text: "Time in s domain"
+                }),
+                ui.createLatexLabel({
+                    text: () => Utils.getMath(sDomainTime + " \\text{ \mins}")
+                }),
+                sDomainSlider,
+                ui.createLabel({
+                    text: "Automation Switch"
+                }),
+                autoLaplaceToggle
             ]
         })
     })
 
-    menu.show();
-}
-
 var createChallengeMenu = () => {
     let menu = ui.createPopup({
-        title: "Assignments (for now, freely accessible)",
+        title: "Assignments",
     })
 
     challengeGrid = []
     for (let i = 1; i < systems.length; i++){
-        if (true){ // i <= assignmentUnlockUpgrade.level){
+        if (systems[i].isUnlocked){
             challengeGrid.push(
                 ui.createGrid({
                     columnDefinitions: ["20*", "15*", "auto"],
                     children: [
                         ui.createLatexLabel({text: Utils.getMath("\\begin{matrix} \\text{Assignment "+ i + "} \\\\ \\text{max } \\rho = " + systems[i].maxRho.toString() + "\\end{matrix}"), horizontalOptions: LayoutOptions.CENTER, verticalOptions: LayoutOptions.CENTER}),
-                        ui.createButton({text: "Start", onClicked: () => { startChallenge(i); menu.hide();}, row: 0, column: 1 }),
-                        ui.createButton({text: "Reward", onClicked: () => { systems[i].viewReward()}, row: 0, column: 2}), 
+                        ui.createButton({text: "Start", onClicked: () => { startChallenge(i); menu.hide();}, row: i - 1, column: 1 }),
+                        ui.createButton({text: "Reward", onClicked: () => { systems[i].viewReward()}, row: i - 1, column: 2}), 
                     ]
                 })
             )
@@ -791,7 +852,8 @@ var createChallengeMenu = () => {
                 ui.createGrid({
                     columnDefinitions: ["20*", "15*", "auto"],
                     children: [
-                        ui.createLatexLabel({text: Utils.getMath("\\text{Assignment "+ i + " locked}"), horizontalOptions: LayoutOptions.CENTER_AND_EXPAND, verticalOptions: LayoutOptions.CENTER_AND_EXPAND}),
+                        ui.createLatexLabel({text: Utils.getMath("\\text{Assignment "+ i + " locked}"), horizontalOptions: LayoutOptions.CENTER_AND_EXPAND, verticalOptions: LayoutOptions.CENTER_AND_EXPAND, row: i - 1, column: 0}),
+                        ui.createButton({text: "Unlock", onClicked: () => { menu.hide(); systems[i].unlock(); }, row: i - 1, column: 2 })
                     ]
                 })
             )
@@ -871,12 +933,11 @@ var getEquationOverlay = () => {
             aspect: Aspect.ASPECT_FILL,
             onTouched: (e) => {
                 if (e.type.isReleased()) {
-                  log("Hello!")
                   if (activeSystemId == 1){
                     systems[1].menu.show();
                   }
                   else {
-                    createLaplaceAutomationMenu();
+                    laplaceAutomationMenu.show();
                   }
                 }
               },
