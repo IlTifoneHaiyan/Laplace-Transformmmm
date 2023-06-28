@@ -10,7 +10,7 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.3.5";
+var version = "1.3.6";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 0;
@@ -89,7 +89,6 @@ var init = () => {
         challengeUnlock.getInfo = (_) => ("Unlock assignments");
         challengeUnlock.canBeRefunded = () => false;
     }
-
 
     // Takes an upgrade within each system and converts it into a purchasable theory upgrade
     var upgradeFactory = (systemId, upgrade, system) => {
@@ -961,7 +960,7 @@ var getEquationOverlay = () => {
 
 var getCurrencyBarDelegate = () => {
     // to be restricted in final version
-    challengeMenuButton.isVisible = () => activeSystemId == 0 && true // () => challengeUnlock.level > 0;
+    challengeMenuButton.isVisible = () => activeSystemId == 0 && challengeUnlock.level > 0;
     laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
     currencyBar = ui.createGrid({
         columnDefinitions: ["20*", "30*", "auto"],
