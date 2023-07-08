@@ -1184,7 +1184,7 @@ var getCurrencyBarDelegate = () => {
                 column: 2,
                 horizontalOptions: LayoutOptions.CENTER,
                 verticalOptions: LayoutOptions.CENTER,
-                isVisible: () => laplaceTransformUnlock.level > 0
+                // isVisible: () => laplaceTransformUnlock.level > 0
             }),
             laplaceButton,
             challengeMenuButton,
