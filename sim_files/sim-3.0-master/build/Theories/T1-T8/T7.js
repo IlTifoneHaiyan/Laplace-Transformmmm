@@ -8,9 +8,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { global } from "../../Sim/main.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import Variable from "../../Utils/variable.js";
+import { add, createResult, l10, subtract } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
 export default function t7(data) {
     return __awaiter(this, void 0, void 0, function* () {
         let sim = new t7Sim(data);
@@ -21,7 +21,6 @@ export default function t7(data) {
 class t7Sim {
     constructor(data) {
         var _a;
-        this.stratIndex = findIndex(data.strats, data.strat);
         this.strat = data.strat;
         this.theory = "T7";
         //theory
@@ -41,17 +40,18 @@ class t7Sim {
         this.rho2 = 0;
         //initialize variables
         this.variables = [
-            new Variable({ lvl: 1, cost: 500, costInc: 1.51572, value: 1, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 10, costInc: 1.275, value: 1, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 40, costInc: 8, varBase: 2 }),
-            new Variable({ cost: 1e5, costInc: 63, varBase: 2 }),
-            new Variable({ cost: 10, costInc: 2.82, varBase: 2 }),
-            new Variable({ cost: 1e8, costInc: 60, varBase: 2 }),
-            new Variable({ cost: 1e2, costInc: 2.81, varBase: 2 })
+            new Variable({ cost: new ExponentialCost(500, 1.51572), stepwisePowerSum: { default: true }, firstFreeCost: true }),
+            new Variable({ cost: new ExponentialCost(10, 1.275), value: 1, stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(40, 8), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(1e5, 63), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(10, 2.82), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(1e8, 60), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(1e2, 2.81), varBase: 2 }),
         ];
         this.drho13 = 0;
         this.drho23 = 0;
         this.c2ratio = Infinity;
+        this.boughtVars = [];
         //pub values
         this.tauH = 0;
         this.maxTauH = 0;
@@ -59,7 +59,6 @@ class t7Sim {
         this.pubRho = 0;
         //milestones  [dimensions, c3term, c5term, c6term, c1exp]
         this.milestones = [0, 0, 0, 0, 0];
-        this.result = [];
         this.pubMulti = 0;
         this.conditions = this.getBuyingConditions();
         this.milestoneConditions = this.getMilestoneConditions();
@@ -77,35 +76,35 @@ class t7Sim {
             this.c2ratio = 50;
         if (this.lastPub >= 300)
             this.c2ratio = Infinity;
-        let conditions = [
-            [true, true, true, true, true, true, true],
-            [true, true, true, false, false, false, false],
-            [true, false, false, true, false, false, false],
-            [true, false, false, true, true, true, true],
-            [true, false, false, false, true, true, true],
-            [true, false, false, false, false, true, true],
-            [() => this.variables[0].cost + 1 < this.variables[2].cost, () => this.variables[1].cost + l10(8) < this.variables[2].cost, true, false, false, false, false],
-            [() => this.variables[0].cost + 1 < this.variables[3].cost, false, false, true, false, false, false],
-            [
+        const conditions = {
+            T7: [true, true, true, true, true, true, true],
+            T7C12: [true, true, true, false, false, false, false],
+            T7C3: [true, false, false, true, false, false, false],
+            T7noC12: [true, false, false, true, true, true, true],
+            T7noC123: [true, false, false, false, true, true, true],
+            T7noC1234: [true, false, false, false, false, true, true],
+            T7C12d: [() => this.variables[0].cost + 1 < this.variables[2].cost, () => this.variables[1].cost + l10(8) < this.variables[2].cost, true, false, false, false, false],
+            T7C3d: [() => this.variables[0].cost + 1 < this.variables[3].cost, false, false, true, false, false, false],
+            T7PlaySpqcey: [
                 () => this.variables[0].cost + l10(4) < this.variables[6].cost,
-                () => this.variables[1].cost + l10(10 + this.variables[2].lvl) < this.variables[2].cost,
+                () => this.variables[1].cost + l10(10 + this.variables[2].level) < this.variables[2].cost,
                 () => this.variables[2].cost + l10(this.c2ratio) < this.variables[6].cost,
                 () => this.variables[3].cost + 1 < this.variables[6].cost,
                 () => this.variables[4].cost + 1 < this.variables[6].cost,
                 () => this.variables[5].cost + l10(4) < this.variables[6].cost,
-                true
-            ] //T7PlaySpqcey
-        ];
-        conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-        return conditions;
+                true,
+            ],
+        };
+        const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+        return condition;
     }
     getMilestoneConditions() {
         let conditions = [() => true, () => true, () => true, () => this.milestones[1] > 0, () => this.milestones[0] > 0, () => this.milestones[2] > 0, () => this.milestones[3] > 0];
         return conditions;
     }
     getMilestoneTree() {
-        let tree = [
-            [
+        const tree = {
+            T7: [
                 [0, 0, 0, 0, 0],
                 [0, 1, 0, 0, 0],
                 [1, 1, 0, 0, 0],
@@ -113,48 +112,48 @@ class t7Sim {
                 [1, 1, 1, 1, 0],
                 [1, 1, 1, 1, 1],
                 [1, 1, 1, 1, 2],
-                [1, 1, 1, 1, 3]
+                [1, 1, 1, 1, 3],
             ],
-            [
+            T7C12: [
                 [0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 1],
                 [0, 0, 0, 0, 2],
-                [0, 0, 0, 0, 3]
+                [0, 0, 0, 0, 3],
             ],
-            [
+            T7C3: [
                 [0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0]
+                [0, 1, 0, 0, 0],
             ],
-            [
+            T7noC12: [
                 [0, 0, 0, 0, 0],
                 [0, 1, 0, 0, 0],
                 [1, 1, 0, 0, 0],
                 [1, 1, 1, 0, 0],
-                [1, 1, 1, 1, 0]
+                [1, 1, 1, 1, 0],
             ],
-            [
+            T7noC123: [
                 [0, 0, 0, 0, 0],
                 [1, 0, 0, 0, 0],
                 [1, 0, 1, 0, 0],
-                [1, 0, 1, 1, 0]
+                [1, 0, 1, 1, 0],
             ],
-            [
+            T7noC1234: [
                 [0, 0, 0, 0, 0],
                 [1, 0, 0, 0, 0],
                 [1, 0, 1, 0, 0],
-                [1, 0, 1, 1, 0]
+                [1, 0, 1, 1, 0],
             ],
-            [
+            T7C12d: [
                 [0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 1],
                 [0, 0, 0, 0, 2],
-                [0, 0, 0, 0, 3]
+                [0, 0, 0, 0, 3],
             ],
-            [
+            T7C3d: [
                 [0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0]
+                [0, 1, 0, 0, 0],
             ],
-            [
+            T7PlaySpqcey: [
                 [0, 0, 0, 0, 0],
                 [0, 1, 0, 0, 0],
                 [1, 1, 0, 0, 0],
@@ -162,17 +161,17 @@ class t7Sim {
                 [1, 1, 1, 1, 0],
                 [1, 1, 1, 1, 1],
                 [1, 1, 1, 1, 2],
-                [1, 1, 1, 1, 3]
-            ] //T7PlaySpqcey
-        ];
-        return tree;
+                [1, 1, 1, 1, 3],
+            ],
+        };
+        return tree[this.strat];
     }
     getTotMult(val) {
         return Math.max(0, val * 0.152) + l10(Math.pow((this.sigma / 20), (this.sigma < 65 ? 0 : this.sigma < 75 ? 1 : this.sigma < 85 ? 2 : 3)));
     }
     updateMilestones() {
         const stage = Math.min(7, Math.floor(Math.max(this.lastPub, this.maxRho) / 25));
-        this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
+        this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
     }
     simulate() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -193,8 +192,11 @@ class t7Sim {
                 this.ticks++;
             }
             this.pubMulti = Math.pow(10, (this.getTotMult(this.pubRho) - this.totMult));
-            this.result = createResult(this, this.strat === "T7PlaySpqcey" ? (this.c2ratio !== Infinity ? this.c2ratio.toString() : "") : "");
-            return this.result;
+            let result = createResult(this, this.strat === "T7PlaySpqcey" ? (this.c2ratio !== Infinity ? this.c2ratio.toString() : "") : "");
+            while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
+                this.boughtVars.pop();
+            global.varBuy.push([result[7], this.boughtVars]);
+            return result;
         });
     }
     tick() {
@@ -222,7 +224,11 @@ class t7Sim {
     buyVariables() {
         for (let i = this.variables.length - 1; i >= 0; i--)
             while (true) {
-                if (this.rho > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
+                if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+                    if (this.maxRho + 5 > this.lastPub) {
+                        let vars = ["q1", "c1", "c2", "c3", "c4", "c5", "c6"];
+                        this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
+                    }
                     this.rho = subtract(this.rho, this.variables[i].cost);
                     this.variables[i].buy();
                 }

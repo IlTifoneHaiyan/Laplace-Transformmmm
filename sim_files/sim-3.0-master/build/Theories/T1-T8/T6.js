@@ -8,10 +8,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { global } from "../../Sim/main.js";
-import { logToExp } from "../../Utils/simHelpers.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import Variable from "../../Utils/variable.js";
+import { add, createResult, l10, subtract, logToExp } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
 export default function t6(data) {
     return __awaiter(this, void 0, void 0, function* () {
         let sim = new t6Sim(data);
@@ -22,7 +21,6 @@ export default function t6(data) {
 class t6Sim {
     constructor(data) {
         var _a;
-        this.stratIndex = findIndex(data.strats, data.strat);
         this.strat = data.strat;
         this.theory = "T6";
         //theory
@@ -43,15 +41,15 @@ class t6Sim {
         this.r = 0;
         //initialize variables
         this.variables = [
-            new Variable({ lvl: 1, cost: 15, costInc: 3, value: 1, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 500, costInc: 100, varBase: 2 }),
-            new Variable({ cost: 1e25, costInc: 1e5, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 1e30, costInc: 1e10, varBase: 2 }),
-            new Variable({ cost: 10, costInc: 2, value: 1, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 100, costInc: 5, varBase: 2 }),
-            new Variable({ cost: 1e7, costInc: 1.255, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 1e25, costInc: 5e5, varBase: 2 }),
-            new Variable({ cost: 15, costInc: 3.9, varBase: 2 })
+            new Variable({ cost: new ExponentialCost(15, 3), stepwisePowerSum: { default: true }, firstFreeCost: true }),
+            new Variable({ cost: new ExponentialCost(500, 100), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(1e25, 1e5), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(1e30, 1e10), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(10, 2), value: 1, stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(100, 5), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(1e7, 1.255), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(1e25, 5e5), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(15, 3.9), varBase: 2 }),
         ];
         this.k = 0;
         this.stopC12 = [0, 0, true];
@@ -63,7 +61,6 @@ class t6Sim {
         this.pubRho = 0;
         //milestones  [q1exp,c3term,c3exp]
         this.milestones = [0, 0, 0];
-        this.result = [];
         this.pubMulti = 0;
         this.conditions = this.getBuyingConditions();
         this.milestoneConditions = this.getMilestoneConditions();
@@ -71,15 +68,15 @@ class t6Sim {
         this.updateMilestones();
     }
     getBuyingConditions() {
-        let conditions = [
-            [true, true, true, true, true, true, true, true, true],
-            [true, true, true, true, false, false, true, false, false],
-            [true, true, true, true, false, false, false, true, false],
-            [true, true, true, true, true, true, false, false, true],
-            [true, true, true, true, true, true, false, false, false],
-            [true, true, true, true, false, false, false, false, true],
-            [true, true, true, true, () => this.stopC12[2], () => this.stopC12[2], false, false, true],
-            [
+        const conditions = {
+            T6: [true, true, true, true, true, true, true, true, true],
+            T6C3: [true, true, true, true, false, false, true, false, false],
+            T6C4: [true, true, true, true, false, false, false, true, false],
+            T6noC34: [true, true, true, true, true, true, false, false, true],
+            T6noC345: [true, true, true, true, true, true, false, false, false],
+            T6noC1234: [true, true, true, true, false, false, false, false, true],
+            T6Snax: [true, true, true, true, () => this.stopC12[2], () => this.stopC12[2], false, false, true],
+            T6C3d: [
                 () => this.variables[0].cost + l10(3) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[6].cost),
                 true,
                 () => this.variables[2].cost + l10(3) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[6].cost),
@@ -88,9 +85,9 @@ class t6Sim {
                 false,
                 true,
                 false,
-                false
+                false,
             ],
-            [
+            T6C4d: [
                 () => this.variables[0].cost + l10(5) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[7].cost),
                 true,
                 () => this.variables[2].cost + l10(5) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[7].cost),
@@ -99,9 +96,9 @@ class t6Sim {
                 false,
                 false,
                 true,
-                false
+                false,
             ],
-            [
+            T6noC34d: [
                 () => this.variables[0].cost + l10(8) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[5].cost, this.milestones[2] > 0 ? this.variables[8].cost : Infinity),
                 true,
                 () => this.variables[2].cost + l10(8) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[5].cost, this.milestones[2] > 0 ? this.variables[8].cost : Infinity),
@@ -110,9 +107,9 @@ class t6Sim {
                 true,
                 false,
                 false,
-                true
+                true,
             ],
-            [
+            T6noC345d: [
                 () => this.variables[0].cost + l10(8) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[5].cost),
                 true,
                 () => this.variables[2].cost + l10(8) < Math.min(this.variables[1].cost, this.variables[3].cost, this.variables[5].cost),
@@ -121,10 +118,10 @@ class t6Sim {
                 true,
                 false,
                 false,
-                false
+                false,
             ],
-            [
-                () => this.variables[0].cost + l10(7 + (this.variables[0].lvl % 10)) < Math.min(this.variables[1].cost, this.variables[3].cost, this.milestones[2] > 0 ? this.variables[8].cost : Infinity),
+            T6noC1234d: [
+                () => this.variables[0].cost + l10(7 + (this.variables[0].level % 10)) < Math.min(this.variables[1].cost, this.variables[3].cost, this.milestones[2] > 0 ? this.variables[8].cost : Infinity),
                 true,
                 () => this.variables[2].cost + l10(5) < Math.min(this.variables[1].cost, this.variables[3].cost, this.milestones[2] > 0 ? this.variables[8].cost : Infinity),
                 true,
@@ -132,37 +129,60 @@ class t6Sim {
                 false,
                 false,
                 false,
-                true
+                true,
             ],
-            [false] //T6AI has own buying system
-        ];
-        conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-        return conditions;
+            T6AI: [],
+        };
+        const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+        return condition;
     }
     getMilestoneConditions() {
-        let conditions = [() => true, () => true, () => this.milestones[0] > 0, () => this.milestones[0] > 0, () => true, () => true, () => true, () => true, () => this.milestones[2] > 0];
+        let conditions = [
+            () => true,
+            () => true,
+            () => this.milestones[0] > 0,
+            () => this.milestones[0] > 0,
+            () => true,
+            () => true,
+            () => true,
+            () => true,
+            () => this.milestones[2] > 0,
+        ];
         return conditions;
     }
     getMilestoneTree() {
-        let tree = [
-            ...new Array(13).fill([
-                [0, 0, 0, 0],
-                [0, 1, 0, 0],
-                [1, 1, 0, 0],
-                [1, 1, 1, 0],
-                [1, 0, 0, 3],
-                [1, 0, 1, 3],
-                [1, 1, 1, 3]
-            ])
+        const globalOptimalRoute = [
+            [0, 0, 0, 0],
+            [0, 1, 0, 0],
+            [1, 1, 0, 0],
+            [1, 1, 1, 0],
+            [1, 0, 0, 3],
+            [1, 0, 1, 3],
+            [1, 1, 1, 3],
         ];
-        return tree;
+        const tree = {
+            T6: globalOptimalRoute,
+            T6C3: globalOptimalRoute,
+            T6C4: globalOptimalRoute,
+            T6noC34: globalOptimalRoute,
+            T6noC345: globalOptimalRoute,
+            T6noC1234: globalOptimalRoute,
+            T6Snax: globalOptimalRoute,
+            T6C3d: globalOptimalRoute,
+            T6C4d: globalOptimalRoute,
+            T6noC34d: globalOptimalRoute,
+            T6noC345d: globalOptimalRoute,
+            T6noC1234d: globalOptimalRoute,
+            T6AI: globalOptimalRoute,
+        };
+        return tree[this.strat];
     }
     getTotMult(val) {
         return Math.max(0, val * 0.196) - l10(50) + l10(Math.pow((this.sigma / 20), (this.sigma < 65 ? 0 : this.sigma < 75 ? 1 : this.sigma < 85 ? 2 : 3)));
     }
     updateMilestones() {
         const stage = Math.min(6, Math.floor(Math.max(this.lastPub, this.maxRho) / 25));
-        this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
+        this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
     }
     calculateIntegral(vc1, vc2, vc3, vc4, vc5) {
         let term1 = vc1 + vc2 + this.q + this.r;
@@ -191,13 +211,11 @@ class t6Sim {
                 this.ticks++;
             }
             this.pubMulti = Math.pow(10, (this.getTotMult(this.pubRho) - this.totMult));
-            this.result = createResult(this, this.strat === "T6snax" ? " " + logToExp(this.stopC12[0], 1) : "");
-            if (this.stratIndex === 12) {
-                while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
-                    this.boughtVars.pop();
-                global.varBuy.push([this.result[7], this.boughtVars]);
-            }
-            return this.result;
+            let result = createResult(this, this.strat === "T6Snax" ? " " + logToExp(this.stopC12[0], 1) : "");
+            while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
+                this.boughtVars.pop();
+            global.varBuy.push([result[7], this.boughtVars]);
+            return result;
         });
     }
     tick() {
@@ -228,10 +246,14 @@ class t6Sim {
         }
     }
     buyVariables() {
-        if (this.stratIndex !== 12)
+        if (this.strat !== "T6AI")
             for (let i = this.variables.length - 1; i >= 0; i--)
                 while (true) {
-                    if (this.rho > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
+                    if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+                        if (this.maxRho + 5 > this.lastPub) {
+                            let vars = ["q1", "q2", "r1", "r2", "c1", "c2", "c3", "c4", "c5"];
+                            this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
+                        }
                         this.rho = subtract(this.rho, this.variables[i].cost);
                         this.variables[i].buy();
                     }
@@ -242,15 +264,15 @@ class t6Sim {
             while (true) {
                 let rawCost = this.variables.map((item) => item.cost);
                 let weights = [
-                    l10(7 + (this.variables[0].lvl % 10)),
+                    l10(7 + (this.variables[0].level % 10)),
                     0,
-                    l10(5 + (this.variables[2].lvl % 10)),
+                    l10(5 + (this.variables[2].level % 10)),
                     0,
-                    Math.max(0, this.k) + l10(8 + (this.variables[4].lvl % 10)),
+                    Math.max(0, this.k) + l10(8 + (this.variables[4].level % 10)),
                     Math.max(0, this.k),
                     Infinity,
                     Infinity,
-                    -Math.min(0, this.k) //c5
+                    -Math.min(0, this.k), //c5
                 ];
                 let minCost = [Number.MAX_VALUE, -1];
                 for (let i = this.variables.length - 1; i >= 0; i--)
@@ -261,7 +283,7 @@ class t6Sim {
                     this.rho = subtract(this.rho, this.variables[minCost[1]].cost);
                     if (this.maxRho + 5 > this.lastPub) {
                         let vars = ["q1", "q2", "r1", "r2", "c1", "c2", "c3", "c4", "c5"];
-                        this.boughtVars.push({ variable: vars[minCost[1]], level: this.variables[minCost[1]].lvl + 1, cost: this.variables[minCost[1]].cost, timeStamp: this.t });
+                        this.boughtVars.push({ variable: vars[minCost[1]], level: this.variables[minCost[1]].level + 1, cost: this.variables[minCost[1]].cost, timeStamp: this.t });
                     }
                     this.variables[minCost[1]].buy();
                 }

@@ -8,9 +8,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { global } from "../../Sim/main.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import Variable from "../../Utils/variable.js";
+import { add, createResult, l10, subtract } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
 export default function t2(data) {
     return __awaiter(this, void 0, void 0, function* () {
         let sim = new t2Sim(data);
@@ -21,7 +21,6 @@ export default function t2(data) {
 class t2Sim {
     constructor(data) {
         var _a;
-        this.stratIndex = findIndex(data.strats, data.strat);
         this.strat = data.strat;
         this.theory = "T2";
         //theory
@@ -48,15 +47,16 @@ class t2Sim {
         this.r4 = 0;
         //initialize variables
         this.variables = [
-            new Variable({ lvl: 1, cost: 10, costInc: 2, value: 1, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 5000, costInc: 2, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 3e25, costInc: 3, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 8e50, costInc: 4, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 2e6, costInc: 2, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 3e9, costInc: 2, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 4e25, costInc: 3, stepwisePowerSum: { default: true } }),
-            new Variable({ cost: 5e50, costInc: 4, stepwisePowerSum: { default: true } })
+            new Variable({ cost: new ExponentialCost(10, 2), stepwisePowerSum: { default: true }, firstFreeCost: true }),
+            new Variable({ cost: new ExponentialCost(5000, 2), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(3e25, 3), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(8e50, 4), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(2e6, 2), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(3e9, 2), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(4e25, 3), stepwisePowerSum: { default: true } }),
+            new Variable({ cost: new ExponentialCost(5e50, 4), stepwisePowerSum: { default: true } }),
         ];
+        this.boughtVars = [];
         //pub values
         this.tauH = 0;
         this.maxTauH = 0;
@@ -64,7 +64,6 @@ class t2Sim {
         this.pubRho = 0;
         //milestones  [qterm, rterm, q1exp, r1exp]
         this.milestones = [0, 0, 0, 0];
-        this.result = [];
         this.pubMulti = 0;
         this.conditions = this.getBuyingConditions();
         this.milestoneConditions = this.getMilestoneConditions();
@@ -72,9 +71,9 @@ class t2Sim {
         this.updateMilestones();
     }
     getBuyingConditions() {
-        let conditions = [
-            new Array(8).fill(true),
-            [
+        const conditions = {
+            T2: new Array(8).fill(true),
+            T2MC: [
                 () => this.curMult < 4650,
                 () => this.curMult < 2900,
                 () => this.curMult < 2250,
@@ -82,35 +81,48 @@ class t2Sim {
                 () => this.curMult < 4650,
                 () => this.curMult < 2900,
                 () => this.curMult < 2250,
-                () => this.curMult < 1150
+                () => this.curMult < 1150,
             ],
-            new Array(8).fill(true),
-            new Array(8).fill(true) //t2qs
-        ];
-        conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-        return conditions;
+            T2MS: new Array(8).fill(true),
+            T2QS: new Array(8).fill(true),
+        };
+        const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+        return condition;
     }
     getMilestoneConditions() {
-        let conditions = [() => true, () => true, () => this.milestones[0] > 0, () => this.milestones[0] > 1, () => true, () => true, () => this.milestones[1] > 0, () => this.milestones[1] > 1];
+        let conditions = [
+            () => true,
+            () => true,
+            () => this.milestones[0] > 0,
+            () => this.milestones[0] > 1,
+            () => true,
+            () => true,
+            () => this.milestones[1] > 0,
+            () => this.milestones[1] > 1,
+        ];
         return conditions;
     }
     getMilestoneTree() {
-        let tree = [
-            ...new Array(4).fill([
-                [0, 0, 0, 0],
-                [1, 0, 0, 0],
-                [2, 0, 0, 0],
-                [2, 1, 0, 0],
-                [2, 2, 0, 0],
-                [2, 2, 1, 0],
-                [2, 2, 2, 0],
-                [2, 2, 3, 0],
-                [2, 2, 3, 1],
-                [2, 2, 3, 2],
-                [2, 2, 3, 3]
-            ]) //t2,t2mc
+        const globalOptimalRoute = [
+            [0, 0, 0, 0],
+            [1, 0, 0, 0],
+            [2, 0, 0, 0],
+            [2, 1, 0, 0],
+            [2, 2, 0, 0],
+            [2, 2, 1, 0],
+            [2, 2, 2, 0],
+            [2, 2, 3, 0],
+            [2, 2, 3, 1],
+            [2, 2, 3, 2],
+            [2, 2, 3, 3],
         ];
-        return tree;
+        const tree = {
+            T2: globalOptimalRoute,
+            T2MC: globalOptimalRoute,
+            T2MS: globalOptimalRoute,
+            T2QS: globalOptimalRoute,
+        };
+        return tree[this.strat];
     }
     getTotMult(val) {
         return Math.max(0, val * 0.198 - l10(100)) + l10(Math.pow((this.sigma / 20), (this.sigma < 65 ? 0 : this.sigma < 75 ? 1 : this.sigma < 85 ? 2 : 3)));
@@ -119,10 +131,8 @@ class t2Sim {
         let milestoneCount = Math.min(10, Math.floor(Math.max(this.lastPub, this.maxRho) / 25));
         this.milestones = [0, 0, 0, 0];
         let priority = [];
-        if (this.stratIndex < 2)
-            priority = [1, 2, 3, 4];
-        //ms for t2ms
-        if (this.stratIndex === 2) {
+        priority = [1, 2, 3, 4];
+        if (this.strat === "T2MS") {
             let tm100 = this.t % 100;
             if (tm100 < 10)
                 priority = [3, 4, 1, 2];
@@ -133,8 +143,7 @@ class t2Sim {
             else if (tm100 < 100)
                 priority = [2, 1, 3, 4];
         }
-        //ms for t2qs
-        if (this.stratIndex === 3) {
+        if (this.strat === "T2QS") {
             let coastMulti = Infinity;
             if (this.lastPub > 0)
                 coastMulti = 10;
@@ -182,8 +191,11 @@ class t2Sim {
                 this.ticks++;
             }
             this.pubMulti = Math.pow(10, (this.getTotMult(this.pubRho) - this.totMult));
-            this.result = createResult(this, "");
-            return this.result;
+            let result = createResult(this, "");
+            while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
+                this.boughtVars.pop();
+            global.varBuy.push([result[7], this.boughtVars]);
+            return result;
         });
     }
     tick() {
@@ -212,7 +224,11 @@ class t2Sim {
     buyVariables() {
         for (let i = this.variables.length - 1; i >= 0; i--)
             while (true) {
-                if (this.rho > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
+                if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+                    if (this.maxRho + 5 > this.lastPub) {
+                        let vars = ["q1", "q2", "q3", "q4", "r1", "r2", "r3", "r4"];
+                        this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
+                    }
                     this.rho = subtract(this.rho, this.variables[i].cost);
                     this.variables[i].buy();
                 }

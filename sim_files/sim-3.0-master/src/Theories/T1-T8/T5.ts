@@ -1,10 +1,8 @@
-import { global } from "../../Sim/main.js";
-import { logToExp, simResult, theoryData } from "../../Utils/simHelpers.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import { variableInterface } from "../../Utils/simHelpers.js";
-import Variable from "../../Utils/variable.js";
-import { varBuys } from "../../UI/simEvents.js";
+import { global, varBuy, theory } from "../../Sim/main.js";
+import { add, createResult, l10, subtract, simResult, theoryData, logToExp } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
+import jsonData from "../../Data/data.json" assert { type: "json" };
 
 export default async function t5(data: theoryData): Promise<simResult> {
   let sim = new t5Sim(data);
@@ -12,14 +10,15 @@ export default async function t5(data: theoryData): Promise<simResult> {
   return res;
 }
 
-class t5Sim {
-  conditions: Array<Array<boolean | Function>>;
-  milestoneConditions: Array<Function>;
-  milestoneTree: Array<Array<Array<number>>>;
+type strat = keyof typeof jsonData.theories.T5.strats;
 
-  stratIndex: number;
-  strat: string;
-  theory: string;
+class t5Sim {
+  conditions: Array<Function>;
+  milestoneConditions: Array<Function>;
+  milestoneTree: Array<Array<number>>;
+
+  strat: strat;
+  theory: theory;
   //theory
   cap: Array<number>;
   recovery: { value: number; time: number; recoveryTime: boolean };
@@ -36,17 +35,9 @@ class t5Sim {
   maxRho: number;
   q: number;
   //initialize variables
-  variables: Array<variableInterface>;
+  variables: Array<Variable>;
   c2worth: boolean;
-  boughtVars: (
-    | number
-    | {
-        variable: string;
-        level: number;
-        cost: number;
-        timeStamp: number;
-      }
-  )[];
+  boughtVars: Array<varBuy>;
   //pub values
   tauH: number;
   maxTauH: number;
@@ -55,49 +46,51 @@ class t5Sim {
   //milestones  [dimensions, b1exp, b2exp, b3exp]
   milestones: Array<number>;
   pubMulti: number;
-  result: Array<any>;
 
   getBuyingConditions() {
-    let conditions: Array<Array<boolean | Function>> = [
-      [true, true, true, true, true], //T5
-      [true, true, () => this.maxRho + (this.lastPub - 200) / 165 < this.lastPub, () => this.c2worth, true], //T5Idle
-      [
-        () => this.variables[0].cost + l10(3 + (this.variables[0].lvl % 10)) <= Math.min(this.variables[1].cost, this.variables[3].cost, this.milestones[2] > 0 ? this.variables[4].cost : 1000),
+    const conditions: { [key in strat]: Array<boolean | Function> } = {
+      T5: [true, true, true, true, true],
+      T5Idle: [true, true, () => this.maxRho + (this.lastPub - 200) / 165 < this.lastPub, () => this.c2worth, true],
+      T5AI2: [
+        () => this.variables[0].cost + l10(3 + (this.variables[0].level % 10)) <= Math.min(this.variables[1].cost, this.variables[3].cost, this.milestones[2] > 0 ? this.variables[4].cost : 1000),
         true,
         () => this.q + l10(1.5) < this.variables[3].value + this.variables[4].value * (1 + 0.05 * this.milestones[2]) || !this.c2worth,
         () => this.c2worth,
-        true
-      ] //T5AI2
-    ];
-    conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-    return conditions;
+        true,
+      ],
+    };
+    const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+    return condition;
   }
   getMilestoneConditions() {
     let conditions: Array<Function> = [() => true, () => true, () => true, () => true, () => this.milestones[1] > 0];
     return conditions;
   }
   getMilestoneTree() {
-    let tree: Array<Array<Array<number>>> = [
-      ...new Array(3).fill([
-        [0, 0, 0],
-        [0, 1, 0],
-        [1, 1, 0],
-        [2, 1, 0],
-        [3, 1, 0],
-        [3, 1, 1],
-        [3, 1, 2]
-      ])
+    const globalOptimalRoute = [
+      [0, 0, 0],
+      [0, 1, 0],
+      [1, 1, 0],
+      [2, 1, 0],
+      [3, 1, 0],
+      [3, 1, 1],
+      [3, 1, 2],
     ];
-    return tree;
+    const tree: { [key in strat]: Array<Array<number>> } = {
+      T5: globalOptimalRoute,
+      T5Idle: globalOptimalRoute,
+      T5AI2: globalOptimalRoute,
+    };
+    return tree[this.strat];
   }
   getTotMult(val: number) {
     return Math.max(0, val * 0.159) + l10((this.sigma / 20) ** (this.sigma < 65 ? 0 : this.sigma < 75 ? 1 : this.sigma < 85 ? 2 : 3));
   }
   updateMilestones(): void {
     const stage = Math.min(6, Math.floor(Math.max(this.lastPub, this.maxRho) / 25));
-    this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
+    this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
   }
-  calculateQ(ic1: number, ic2: number, ic3: number): number {
+  calculateQ(ic1: number, ic2: number, ic3: number) {
     let log10E = Math.log10(Math.E);
     let sub = -Infinity;
     if (ic2 + ic3 > this.q) sub = subtract(ic2 + ic3, this.q);
@@ -109,8 +102,7 @@ class t5Sim {
     return ic2 + ic3 - Math.log10(1 + 1 / Math.E ** ((relT + this.dt) * 10 ** (ic1 - ic2 + ic3)));
   }
   constructor(data: theoryData) {
-    this.stratIndex = findIndex(data.strats, data.strat);
-    this.strat = data.strat;
+    this.strat = data.strat as strat;
     this.theory = "T5";
     //theory
     this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
@@ -129,11 +121,11 @@ class t5Sim {
     this.q = 0;
     //initialize variables
     this.variables = [
-      new Variable({ lvl: 1, cost: 10, costInc: 1.61328, value: 1, stepwisePowerSum: { default: true } }),
-      new Variable({ cost: 15, costInc: 64, varBase: 2 }),
-      new Variable({ cost: 1e6, costInc: 1.18099, value: 1, stepwisePowerSum: { default: true } }),
-      new Variable({ cost: 75, costInc: 4.53725, varBase: 2 }),
-      new Variable({ cost: 1e3, costInc: 8.85507e7, varBase: 2 })
+      new Variable({ cost: new ExponentialCost(10, 1.61328), stepwisePowerSum: { default: true }, firstFreeCost: true }),
+      new Variable({ cost: new ExponentialCost(15, 64), varBase: 2 }),
+      new Variable({ cost: new ExponentialCost(1e6, 1.18099), value: 1, stepwisePowerSum: { default: true } }),
+      new Variable({ cost: new ExponentialCost(75, 4.53725), varBase: 2 }),
+      new Variable({ cost: new ExponentialCost(1e3, 8.85507e7), varBase: 2 }),
     ];
     this.c2worth = true;
     this.boughtVars = [];
@@ -144,7 +136,6 @@ class t5Sim {
     this.pubRho = 0;
     //milestones  [q1exp,c3term,c3exp]
     this.milestones = [0, 0, 0];
-    this.result = [];
     this.pubMulti = 0;
     this.conditions = this.getBuyingConditions();
     this.milestoneConditions = this.getMilestoneConditions();
@@ -165,12 +156,12 @@ class t5Sim {
       this.ticks++;
     }
     this.pubMulti = 10 ** (this.getTotMult(this.pubRho) - this.totMult);
-    this.result = createResult(this, this.stratIndex === 1 ? " " + logToExp(this.variables[2].cost, 1) : "");
-    if (this.stratIndex === 2) {
-      while ((<varBuys>this.boughtVars[this.boughtVars.length - 1]).timeStamp > this.pubT) this.boughtVars.pop();
-      global.varBuy.push([this.result[7], this.boughtVars]);
-    }
-    return this.result;
+    let result = createResult(this, this.strat === "T5Idle" ? " " + logToExp(this.variables[2].cost, 1) : "");
+
+    while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT) this.boughtVars.pop();
+    global.varBuy.push([result[7], this.boughtVars]);
+
+    return result;
   }
   tick() {
     let vq1 = this.variables[0].value * (1 + 0.05 * this.milestones[0]);
@@ -198,10 +189,10 @@ class t5Sim {
     this.c2worth = iq >= this.variables[3].value + nc3 + l10(2 / 3);
     for (let i = this.variables.length - 1; i >= 0; i--) {
       while (true) {
-        if (this.rho > this.variables[i].cost && (<Function>this.conditions[this.stratIndex][i])() && this.milestoneConditions[i]()) {
-          if (this.maxRho + 5 > this.lastPub && this.stratIndex === 2) {
+        if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+          if (this.maxRho + 5 > this.lastPub) {
             let vars = ["q1", "q2", "c1", "c2", "c3"];
-            this.boughtVars.push({ variable: vars[i], level: this.variables[i].lvl + 1, cost: this.variables[i].cost, timeStamp: this.t });
+            this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
           }
           this.rho = subtract(this.rho, this.variables[i].cost);
           this.variables[i].buy();

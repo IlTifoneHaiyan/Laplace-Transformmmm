@@ -8,10 +8,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { global } from "../../Sim/main.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import Variable from "../../Utils/variable.js";
-import { getTauFactor } from "../../Sim/Components/helpers.js";
+import { add, createResult, l10, subtract } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
+import jsonData from "../../Data/data.json" assert { type: "json" };
 export default function sl(data) {
     return __awaiter(this, void 0, void 0, function* () {
         let sim = new slSim(data);
@@ -26,10 +26,9 @@ class slSim {
             let y = l10(l10(2) / Math.LOG10E + x / Math.LOG10E + l10(Math.PI) / Math.LOG10E) - (l10(2) + x);
             this.inverseE_Gamma = 0 - Math.LOG10E - add(subtract(y, y + y - l10(2)), y + y + y + l10(6));
         };
-        this.stratIndex = findIndex(data.strats, data.strat);
         this.strat = data.strat;
         this.theory = "SL";
-        this.tauFactor = getTauFactor(this.theory);
+        this.tauFactor = jsonData.theories.SL.tauFactor;
         //theory
         this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
         this.recovery = (_a = data.recovery) !== null && _a !== void 0 ? _a : { value: 0, time: 0, recoveryTime: false };
@@ -49,12 +48,13 @@ class slSim {
         this.q = 0;
         //initialize variables
         this.variables = [
-            new Variable({ lvl: 1, cost: 1, costInc: Math.pow(2, (0.369 * Math.log2(10))), value: 1, stepwisePowerSum: { base: 3.5, length: 3 } }),
-            new Variable({ cost: 175, costInc: 10, varBase: 2 }),
-            new Variable({ cost: 500, costInc: Math.pow(2, (0.649 * Math.log2(10))), stepwisePowerSum: { base: 6.5, length: 4 } }),
-            new Variable({ cost: 1000, costInc: Math.pow(2, (0.926 * Math.log2(10))), varBase: 2 })
+            new Variable({ cost: new ExponentialCost(1, 0.369 * Math.log2(10), true), stepwisePowerSum: { base: 3.5, length: 3 }, firstFreeCost: true }),
+            new Variable({ cost: new ExponentialCost(175, 10), varBase: 2 }),
+            new Variable({ cost: new ExponentialCost(500, 0.649 * Math.log2(10), true), stepwisePowerSum: { base: 6.5, length: 4 } }),
+            new Variable({ cost: new ExponentialCost(1000, 0.926 * Math.log2(10), true), varBase: 2 }),
         ];
         this.inverseE_Gamma = 0;
+        this.boughtVars = [];
         //pub values
         this.tauH = 0;
         this.maxTauH = 0;
@@ -62,32 +62,31 @@ class slSim {
         this.pubRho = 0;
         //milestones  [rho2exp, a3exp, b1exp, b2exp]
         this.milestones = [0, 0, 0, 0];
-        this.result = [];
         this.pubMulti = 0;
         this.conditions = this.getBuyingConditions();
         this.milestoneConditions = this.getMilestoneConditions();
         this.updateMilestones();
     }
     getBuyingConditions() {
-        let conditions = [
-            [true, true, true, true],
-            [() => this.curMult < 4.5, () => this.curMult < 4.5, () => this.curMult < 6, () => this.curMult < 6],
-            [
-                () => this.curMult < 4.5 && this.variables[0].cost + l10(2 * (this.variables[0].lvl % 3) + 0.0001) < this.variables[1].cost,
+        const conditions = {
+            SL: [true, true, true, true],
+            SLStopA: [() => this.curMult < 4.5, () => this.curMult < 4.5, () => this.curMult < 6, () => this.curMult < 6],
+            SLStopAd: [
+                () => this.curMult < 4.5 && this.variables[0].cost + l10(2 * (this.variables[0].level % 3) + 0.0001) < this.variables[1].cost,
                 () => this.curMult < 4.5,
                 () => this.curMult < 6 && this.variables[2].cost + l10(this.variables[2].cost % 4) < this.variables[3].cost,
-                () => this.curMult < 6
+                () => this.curMult < 6,
             ],
-            [() => this.curMult < 4, () => this.curMult < 4, () => this.curMult < 7.5, () => this.curMult < 7.5],
-            [
-                () => this.curMult < 4 && this.variables[0].cost + l10(2 * (this.variables[0].lvl % 3) + 0.0001) < this.variables[1].cost,
+            SLMS: [() => this.curMult < 4, () => this.curMult < 4, () => this.curMult < 7.5, () => this.curMult < 7.5],
+            SLMSd: [
+                () => this.curMult < 4 && this.variables[0].cost + l10(2 * (this.variables[0].level % 3) + 0.0001) < this.variables[1].cost,
                 () => this.curMult < 4,
                 () => this.curMult < 7.5 && this.variables[2].cost + l10(this.variables[2].cost % 4) < this.variables[3].cost,
-                () => this.curMult < 7.5
-            ] //SLMSd
-        ];
-        conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-        return conditions;
+                () => this.curMult < 7.5,
+            ],
+        };
+        const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+        return condition;
     }
     getMilestoneConditions() {
         let conditions = [() => true, () => true, () => true, () => true];
@@ -101,7 +100,7 @@ class slSim {
         let milestoneCount = Math.min(13, Math.floor(maxVal / 25));
         this.milestones = [0, 0, 0, 0];
         let priority = [4, 3, 1, 2];
-        if (this.stratIndex > 2 && maxVal >= 25 && maxVal <= 300) {
+        if ((this.strat === "SLMS" || this.strat === "SLMSd") && maxVal >= 25 && maxVal <= 300) {
             //when to swap to a3exp (increasing rho2dot) before b1b2
             let emg_Before_b1b2 = 5;
             //when to swap to rho2 exp before b1b2
@@ -179,8 +178,11 @@ class slSim {
                 this.ticks++;
             }
             this.pubMulti = Math.pow(10, (this.getTotMult(this.pubRho) - this.totMult));
-            this.result = createResult(this, "");
-            return this.result;
+            let result = createResult(this, "");
+            while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT)
+                this.boughtVars.pop();
+            global.varBuy.push([result[7], this.boughtVars]);
+            return result;
         });
     }
     tick() {
@@ -205,7 +207,11 @@ class slSim {
     buyVariables() {
         for (let i = this.variables.length - 1; i >= 0; i--)
             while (true) {
-                if (this.rho > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
+                if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+                    if (this.maxRho + 5 > this.lastPub) {
+                        let vars = ["a1", "a2", "b1", "b2"];
+                        this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
+                    }
                     this.rho = subtract(this.rho, this.variables[i].cost);
                     this.variables[i].buy();
                 }
