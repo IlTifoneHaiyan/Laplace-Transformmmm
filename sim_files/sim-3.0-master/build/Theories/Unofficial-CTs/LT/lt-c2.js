@@ -35,39 +35,42 @@ class ltSim {
         this.ticks = 0;
         this.timer = 0;
         this.currencies = [0, 0];
-        this.cycleTimes = [5, 1 * 60];
+        this.cycleTimes = [55, 1 * 60];
         this.maxRho = 0;
         this.t_var = 0;
         this.q = 0;
-        this.laplaceActive = false;
+        this.laplaceActive = true;
         this.variables = [
             new Variable({
-                cost: new ExponentialCost(1000, 1.8),
+                cost: new ExponentialCost(1e1, 1.8),
                 value: 1,
                 stepwisePowerSum: { default: true },
             }),
             new Variable({
-                cost: new ExponentialCost(7500, 9),
+                cost: new ExponentialCost(1e2, 12),
                 varBase: 2,
             }),
             new Variable({
-                cost: new ExponentialCost(100, 22),
-                stepwisePowerSum: { base: 1, length: 1 }
+                cost: new ExponentialCost(4e3, 5e2),
             }),
             new Variable({
-                cost: new ExponentialCost(100, 2),
+                cost: new ExponentialCost(50, 1.8),
                 stepwisePowerSum: { default: true },
             }),
             new Variable({
-                cost: new ExponentialCost(1000, 11),
+                cost: new ExponentialCost(11, 11),
                 varBase: 2,
+                firstFreeCost: true
             }),
             new Variable({
-                cost: new ExponentialCost(100000, 100),
-                varBase: 3,
+                cost: new ExponentialCost(1e2, 1e3),
+                varBase: 0.7,
             }),
+            new Variable({
+                cost: new ExponentialCost(1e7, 1),
+            })
         ];
-        this.varNames = ["c1", "c2", "n", "c1s", "c2s", "lambda"];
+        this.varNames = ["c1", "c2", "n", "c1s", "c2s", "lambda", "timeMachine"];
         this.boughtVars = [];
         this.tauH = 0;
         this.maxTauH = 0;
@@ -80,7 +83,17 @@ class ltSim {
         this.milestoneConditions = this.getMilestoneConditions();
     }
     getBuyingConditions() {
-        const conditions = { "LT-c2": new Array(this.variables.length).fill(true) };
+        const conditions = {
+            "LT-c2-AI": [
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+            ]
+        };
         const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
         return condition;
     }
@@ -88,10 +101,11 @@ class ltSim {
         return [
             () => this.laplaceActive == false,
             () => this.laplaceActive == false,
-            () => this.laplaceActive == false,
+            () => this.laplaceActive == false && this.variables[2].level < 4,
             () => this.laplaceActive == true,
             () => this.laplaceActive == true,
-            () => this.laplaceActive == true,
+            () => this.laplaceActive == true && this.variables[5].level < 10,
+            () => this.laplaceActive == true && this.variables[6].level < 1
         ];
     }
     simulate() {
@@ -131,20 +145,25 @@ class ltSim {
         }
         let ldt = l10(this.dt);
         if (this.laplaceActive) {
-            let lqs = lfactorial(this.variables[2].level + 1) - this.variables[5].value * (this.variables[2].level + 2);
-            this.currencies[1] = add(this.currencies[1], this.variables[3].value + this.variables[4].value - lqs + ldt);
+            if (this.variables[6].level >= 1)
+                this.t_var = Math.min(add(this.t_var, ldt), 2);
+            let lqs = lfactorial(2 * this.variables[2].level + 1) - this.variables[5].value * (2 * this.variables[2].level + 2);
+            this.currencies[1] = add(this.currencies[1], this.variables[3].value + this.variables[4].value + lqs + ldt);
         }
         else {
-            this.t_var = add(this.t_var, ldt);
-            this.q = this.t_var * (this.variables[2].level + 1) + l10(Math.E) * (-1 * this.t_var * this.variables[5].value);
-            this.currencies[0] = add(this.currencies[0], this.variables[0].value + this.variables[1].value + this.variables[5].value * 0.1 - this.q + ldt);
+            if (this.t_var > ldt)
+                this.t_var = subtract(this.t_var, ldt);
+            this.q = this.t_var * (2 * this.variables[2].level + 1) + l10(Math.pow(Math.E, (-1 * Math.pow(10, this.t_var) * Math.pow(10, this.variables[5].value))));
+            console.log(this.q);
+            this.currencies[0] = add(this.currencies[0], this.variables[0].value + this.variables[1].value + l10(1 + Math.pow(10, this.q)) + ldt);
         }
-        this.timer += this.dt / 1.5;
+        if (this.variables[6].level >= 1)
+            this.timer += this.dt / 1.5;
         this.t += this.dt / 1.5;
         this.dt *= this.ddt;
     }
     buyVariables() {
-        const currencyIndices = [0, 0, 0, 1, 1, 1];
+        const currencyIndices = [0, 0, 0, 1, 1, 1, 1];
         for (let i = this.variables.length - 1; i >= 0; i--)
             while (true) {
                 if (this.currencies[currencyIndices[i]] > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {

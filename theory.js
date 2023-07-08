@@ -613,7 +613,7 @@ var init = () => {
                 internalId: 1,
                 description: (_) => Utils.getMath("c_1 =" + this.getC1(this.c1.upgrade.level)),
                 info: (amount) => Utils.getMathTo("c_1 =" + this.getC1(this.c1.upgrade.level), "c_1=" + this.getC1(this.c1.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e7, Math.log2(1.8)),
+                costModel: new ExponentialCost(1e1, Math.log2(1.8)),
                 laplaceUpgrade: false,
             }
 
@@ -621,21 +621,22 @@ var init = () => {
                 internalId: 2,
                 description: (_) => Utils.getMath("c_{2} = 2^{" + this.c2.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("c_2 =" + this.getC2(this.c2.upgrade.level), "c_{2}=" + this.getC2(this.c2.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e6, Math.log2(9)),
+                costModel: new ExponentialCost(1e2, Math.log2(12)),
                 laplaceUpgrade: false
             }
             this.n = {
                 internalId: 3,
                 description: (_) => Utils.getMath("n = " + this.getN(this.n.upgrade.level)),
                 info: (amount) => Utils.getMathTo("n =" + this.getN(this.n.upgrade.level), " n =" + this.getN(this.n.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e10, Math.log2(22)),
+                costModel: new ExponentialCost(1e3, Math.log2(5e2)),
+                maxLevel: 4,
                 laplaceUpgrade: false
             }
             this.c1s = {
                 internalId: 4,
                 description: (_) => Utils.getMath("c_{1s} =" + this.getC1S(this.c1s.upgrade.level)),
                 info: (amount) => Utils.getMathTo("c_{1s} =" + this.getC1S(this.c1s.upgrade.level), "c_{1s}=" + this.getC1S(this.c1s.upgrade.level + amount)),
-                costModel: new FirstFreeCost(new ExponentialCost(10, Math.log2(2))),
+                costModel: new ExponentialCost(50, Math.log2(1.8)),
                 laplaceUpgrade: true
             }
 
@@ -643,16 +644,17 @@ var init = () => {
                 internalId: 5,
                 description: (_) => Utils.getMath("c_{2s} = 2^{" + this.c2s.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("c_{2s} =" + this.getC2S(this.c2s.upgrade.level), "c_{2s}=" + this.getC2S(this.c2s.upgrade.level + amount)),
-                costModel: new ExponentialCost(1000, Math.log2(11)),
+                costModel: new FirstFreeCost(new ExponentialCost(11, Math.log2(11))),
                 laplaceUpgrade: true    
             }
 
             this.lambda = {
                 internalId: 6,
-                description: (_) => Utils.getMath("\\lambda = 0.99^{" + this.lambda.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\lambda = 0.7^{" + this.lambda.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), 
                 "\\lambda = " + this.getLambda(this.lambda.upgrade.level + amount)),
-                costModel: new ExponentialCost(100000, Math.log2(100)),
+                costModel: new ExponentialCost(1e2, Math.log2(1e3)),
+                maxLevel: 10,
                 laplaceUpgrade: true    
             }
 
@@ -661,7 +663,7 @@ var init = () => {
                 description: (_) => Utils.getMath("\\text{???}"),
                 info: (_) => Utils.getMath("\\text{???}"),
                 maxLevel: 1,
-                costModel: new ExponentialCost(1e15, 1),
+                costModel: new ExponentialCost(1e7, 1),
                 laplaceUpgrade: true
             }
 
@@ -675,26 +677,27 @@ var init = () => {
         
         getC1(level) { return Utils.getStepwisePowerSum(level, 2, 10, 1); }
         getC2(level) { return BigNumber.TWO.pow(level); }
-        getN(level) { return level + 1; }
+        getN(level) { return 2 * level + 1; }
         getNFactorial(value) { return (2 * BigNumber.PI * value).pow(0.5) * (BigNumber.from(value) / BigNumber.E).pow(value) * (
             // Stirling series to approximate factorial
               1 + 1 / (12 * value) + 1 / (288 * value ** 2) - 139 / (51840 * value ** 3) - 571 / (2488320 * value ** 4) )};
 
         getC1S(level) { return Utils.getStepwisePowerSum(level, 2, 10, 1); }
         getC2S(level) { return BigNumber.TWO.pow(level); }
-        getLambda(level) { return BigNumber.from(0.99).pow(level); }
+        getLambda(level) { return BigNumber.from(0.7).pow(level); }
         getQS() { return this.getNFactorial(this.getN(this.n.upgrade.level)) / (this.getLambda(this.lambda.upgrade.level).pow
         (this.getN(this.n.upgrade.level) + 1)) }
 
         tick(elapsedTime, _) {
             let dt = elapsedTime;
             if (laplaceActive){
-                if (this.timeMachine.upgrade.level > 0) this.t -= dt;
+                if (this.timeMachine.upgrade.level > 0) this.t = (this.t - dt).max(-100);
                 this.laplaceCurrency += this.getC1S(this.c1s.upgrade.level) * this.getC2S(this.c2s.upgrade.level) * this.getQS() * dt;
             }
             else{
-                this.t += dt;
-                this.q = this.t.pow(this.getN(this.n.upgrade.level)) * 
+                this.t = (this.t + dt).min(3600);
+                this.q = (this.t.sign) ** (this.getN(this.n.upgrade.level)) 
+                * this.t.abs().pow(this.getN(this.n.upgrade.level)) * 
                 BigNumber.E.pow(this.getLambda(this.lambda.upgrade.level) * this.t);
                 this.currency += this.getC1(this.c1.upgrade.level) * this.getC2(this.c2.upgrade.level) * (1 - this.q) * dt
             }
@@ -709,11 +712,11 @@ var init = () => {
             let result = "\\begin{matrix}";
             if (!laplaceActive) {
                 result += "\\dot{\\rho} = c_{1} c_{2} (1 - q_t) \\\\";
-                result += "q_t = t^n e^{-\\lambda t} \\\\";
+                result += "q_t = t^n e^{\\lambda t} \\\\";
             }
             else {
                 result += "\\dot{\\Lambda} = \\ c_{1s} c_{2s}q_s";
-                result += "\\\\ q_s = \\frac{n!}{(s - \\lambda)^(n+1)}";
+                result += "\\\\ q_s = \\frac{n!}{(s - \\lambda)^{(n+1)}}";
             }
             result += "\\end{matrix}"
             return result;
@@ -1157,7 +1160,7 @@ var getEquationOverlay = () => {
 var getCurrencyBarDelegate = () => {
     // to be restricted in final version
     challengeMenuButton.isVisible = () => activeSystemId == 0 && challengeUnlock.level > 0;
-    laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
+    // laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
     currencyBar = ui.createGrid({
         columnDefinitions: ["20*", "30*", "auto"],
         children: [
