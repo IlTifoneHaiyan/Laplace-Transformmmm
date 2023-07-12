@@ -10,7 +10,7 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.4.2";
+var version = "1.4.2.1";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 3;
@@ -1130,6 +1130,7 @@ var updateAvailability = () => {
     }
 
     systems[0].tDotExponent.upgrade.isAvailable = systems[2].isCleared() && !this.laplaceActive && activeSystemId == 0;
+    systems[3].resetT.isAvailable = activeSystemId == 3;
     challengeUnlock.isAvailable = qtExponent.level >= 3 && piExponent.level >= 3;
 }
 
