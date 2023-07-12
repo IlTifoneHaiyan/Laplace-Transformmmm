@@ -399,7 +399,13 @@
         "LT-c2": {
             "tauFactor": 1,
             "strats": {
-                "LT-c2": {}
+                "LT-c2-AI": {}
+            }
+        },
+        "LT-c3": {
+            "tauFactor": 1,
+            "strats": {
+                "LT-c3-AI": {}
             }
         }
     },

@@ -243,7 +243,7 @@ class ltSim {
             let q = this.variables[2].value;
             if (this.t_var < 2)
                 q += l10(1 - Math.exp(-Math.pow(10, this.t_var)));
-            this.currencies[0] = add(this.currencies[0], bonus + this.variables[0].value * (1 + 0.05 * this.milestones[0]) + this.variables[1].value + (this.variables[6].value) * (1 + 0.05 * (this.variables[7].level) + (this.lastPub > 2300 ? (this.t_var / 600) : 0)) + q + ldt);
+            this.currencies[0] = add(this.currencies[0], bonus + this.variables[0].value * (1 + 0.05 * this.milestones[0]) + this.variables[1].value + (this.variables[6].value) * (1 + 0.05 * (this.variables[7].level) + (this.lastPub > 2300 ? (this.t_var / 625) : 0)) + q + ldt);
         }
         this.timer += this.dt / 1.5;
         this.t += this.dt / 1.5;

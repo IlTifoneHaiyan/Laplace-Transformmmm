@@ -10,10 +10,10 @@ var name = "Laplace Transforms";
 var tauExponent = 0.015;
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.4.1";
+var version = "1.4.2";
 var currency;
 var laplaceActive = false;
-var activeSystemId = 2;
+var activeSystemId = 3;
 var systems = []
 var timer = 0;
 var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase;
@@ -23,21 +23,23 @@ var automationEnabled = false;
 
 // UI Sliders
 var tDomainSlider = ui.createSlider({
-    minimum: 1,
-    maximum: 60,
     value: tDomainTime,
     onValueChanged: () => {
         tDomainTime = Math.round(tDomainSlider.value)
     }
 }); 
 var sDomainSlider = ui.createSlider({
-    minimum: 1,
-    maximum: 60,
     value: sDomainTime,
     onValueChanged: () => {
         sDomainTime = Math.round(sDomainSlider.value)
     }
 });
+
+tDomainSlider.maximum = 60;
+tDomainSlider.minimum = 1;
+sDomainSlider.maximum = 60;
+sDomainSlider.minimum = 1;
+
 var autoLaplaceToggle = ui.createSwitch({
     onToggled: () => {
         automationEnabled = !automationEnabled;
@@ -447,7 +449,7 @@ var init = () => {
         constructor(){
             super();
             this.systemId = 2;
-            this.t = BigNumber.ZERO;
+            this.t = BigNumber.FIVE;
             this.q = BigNumber.ZERO;
             this.isUnlocked = false;
             this.currency = BigNumber.ZERO;
@@ -664,6 +666,237 @@ var init = () => {
         }
     }
 
+    class ChallengeThree extends System{
+        constructor(){
+            super();
+            this.systemId = 3;
+            this.t = 30;
+            this.q = BigNumber.ZERO;
+            this.isUnlocked = false;
+            this.currency = BigNumber.ZERO;
+            this.laplaceCurrency = BigNumber.ZERO;
+            this.maxRho = BigNumber.TEN.pow(0);
+            this.goal = BigNumber.from(1e30);
+
+            this.c1 = {
+                internalId: 1,
+                description: (_) => Utils.getMath("c_{1} = 2^{" + this.c1.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_1 =" + this.getC1(this.c1.upgrade.level), "c_{2}=" + this.getC1(this.c1.upgrade.level + amount)),
+                costModel: new SuperExponentialCost(3e1, 8, 1.25).parseCustomCost(),
+                laplaceUpgrade: false,
+                isSuperExponentialCost: true,
+            }
+
+            this.c2 = {
+                internalId: 2,
+                description: (_) => Utils.getMath("c_{2} = 3^{" + this.c2.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_2 =" + this.getC2(this.c2.upgrade.level), "c_{2}=" + this.getC2(this.c2.upgrade.level + amount)),
+                costModel: new SuperExponentialCost(100, 12, 1.25).parseCustomCost(),
+                laplaceUpgrade: false,
+                isSuperExponentialCost: true
+            }
+            this.c3 = {
+                internalId: 3,
+                description: (_) => Utils.getMath("c_3 = " + this.getC3(this.c3.upgrade.level) + "c_{3s}"),
+                info: (amount) => Utils.getMath("c_3 =" + this.getC3(this.c3.upgrade.level) * this.getC3S(this.c3s.upgrade.level)),
+                costModel: new ExponentialCost(50, Math.log2(1.8)),
+                laplaceUpgrade: false
+            }
+            this.c1s = {
+                internalId: 4,
+                description: (_) => Utils.getMath("c_{1s} =" + this.getC1S(this.c1s.upgrade.level) + "c_1"),
+                info: (amount) => Utils.getMath("c_{1s} =" + this.getC1S(this.c1s.upgrade.level) * this.getC1(this.c1.upgrade.level)),
+                costModel: new ExponentialCost(50, Math.log2(1.8)),
+                laplaceUpgrade: true
+            }
+
+            this.c2s = {
+                internalId: 5,
+                description: (_) => Utils.getMath("c_{2s} = " + this.getC2S(this.c2s.upgrade.level) + "c_2"),
+                info: (amount) => Utils.getMath("c_{2s} = " + this.getC2S(this.c2s.upgrade.level) * this.getC2(this.c2.upgrade.level)),
+                costModel: new FirstFreeCost(new ExponentialCost(11, Math.log2(3))),
+                laplaceUpgrade: true    
+            }
+
+            this.c3s = {
+                internalId: 6,
+                description: (_) => Utils.getMath("c_{3s} = 2^{" + this.c3s.upgrade.level + "}"),
+                info: (amount) => Utils.getMathTo("c_{3s} = " + this.getC3S(this.c3s.upgrade.level), 
+                "c_{3s} = " + this.getC3S(this.c3s.upgrade.level + amount)),
+                costModel: new ExponentialCost(100, Math.log2(5.5)),
+                laplaceUpgrade: true    
+            }
+
+            this.lambda = {
+                internalId: 7,
+                description: (_) => Utils.getMath("\\lambda = " + this.getLambda(this.lambda.upgrade.level).toFixed(2)),
+                info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level).toFixed(2), "\\lambda = " + this.getLambda(this.lambda.upgrade.level + amount).toFixed(2)),
+                costModel: new ExponentialCost(1e2, Math.log2(40)),
+                laplaceUpgrade: true
+            }
+
+            this.resetT = theory.createSingularUpgrade(this.systemId * 100 + 8, currency, new FreeCost())
+            {
+                this.resetT.description = Utils.getMath("t \\leftarrow 30");
+                this.resetT.info = Utils.getMath("t \\leftarrow 30");
+                this.resetT.maxLevel = 4;
+                this.resetT.boughtOrRefunded = (_) => this.t = 30;
+
+            }
+            this.upgrades = [this.c1, this.c2, this.c3, this.c1s, this.c2s, this.c3s, this.lambda];
+            for (var upgrade of this.upgrades) {
+                let temp = upgradeFactory(this.systemId, upgrade, this);
+                // this creates a 'pointer' to the real upgrade within the object instance
+                upgrade.upgrade = temp;
+            }
+        }
+        
+        getC1(level) { return BigNumber.TWO.pow(level); }
+        getC2(level) { return BigNumber.THREE.pow(level); }
+        getC3(level) { return BigNumber.TWO.pow(level * 0.1); }
+        getC1S(level) { return BigNumber.TWO.pow(level * 0.1); }
+        getC2S(level) { return BigNumber.THREE.pow(level * 0.1); }
+        getC3S(level) { return BigNumber.TWO.pow(level); }
+        getQS() {
+            let s = BigNumber.from(1/this.t)
+            return this.getC3S(this.c3s.upgrade.level) / s * BigNumber.E.pow(-1 * this.getLambda(this.lambda.upgrade.level) * s)
+        }   
+        getLambda(level) { return 25 * 0.9 ** level; }
+
+        tick(elapsedTime, _) {
+            let dt = elapsedTime;
+            if (laplaceActive){
+               this.laplaceCurrency += this.getC1(this.c1.upgrade.level) * this.getC2(this.c2.upgrade.level) * 
+               this.getC1S(this.c1s.upgrade.level) * this.getC2S(this.c2s.upgrade.level) * this.getQS() * dt;
+            }
+            else{
+                this.t -= dt;
+                this.t = Math.max(this.t, this.getLambda(this.lambda.upgrade.level));
+                this.q = (this.t > this.getLambda(this.lambda.upgrade.level))? this.getC3S(this.c3s.upgrade.level) * this.getC3(this.c3.upgrade.level) : BigNumber.ZERO; 
+                BigNumber.E.pow(this.getLambda(this.c3s.upgrade.level) * this.t);
+                this.currency += this.getC1(this.c1.upgrade.level) * this.getC2(this.c2.upgrade.level) * (this.q) * dt
+            }
+
+            if (this.currency > this.maxRho){
+                this.maxRho = this.currency
+            }
+        }
+
+        unlock(){
+            if(true){ // systems[0].t >= BigNumber.from(1e20)){
+                this.isUnlocked = true;
+            }
+            else{
+                let menu = ui.createPopup({
+                    title: "Unlock Condition",
+                    content: ui.createStackLayout({
+                        children: [
+                            ui.createLatexLabel({
+                                text: Utils.getMath("t > 1e20")
+                            }),
+                        ]
+                    })
+                });
+                    menu.show();
+            }
+        }
+
+        isCleared(){
+            return this.maxRho >= this.goal;
+        }
+
+        primaryEquation() {
+            theory.primaryEquationHeight = 82;
+            let result = "\\begin{matrix}";
+            if (!laplaceActive) {
+                result += "\\dot{\\rho} = c_{1} c_{2} q_t \\\\";
+                result += "q_t = u_t(t-\\lambda)c_3 \\\\";
+            }
+            else {
+                result += "\\dot{\\Lambda} = \\ c_{1s} c_{2s}q_s";
+                result += "\\\\ q_s = \\frac{c_{3s}}{s}e^{-\\lambda s}";
+            }
+            result += "\\end{matrix}"
+            return result;
+        }
+
+        secondaryEquation() {
+            theory.secondaryEquationHeight = 100;
+            theory.secondaryEquationScale = 1.4;
+            if (laplaceActive) {
+                // Equation while under Laplace transform
+                let result = "\\begin{matrix}"
+                result += "s = \\frac{1}{t}"
+                result += "\\end{matrix}"
+                return result
+            }
+            else {
+                // Default case
+                let result = "\\begin{matrix}"
+                result += "\\\\ \\max \\rho = " + this.maxRho.toString()
+                result += "\\end{matrix}"
+                return result;
+            }
+        }
+
+        tertiaryEquation() {
+            let result = "t = " + this.t.toFixed(2);
+            if(laplaceActive){
+                result += ", \\ q_s = " + this.getQS().toString();
+            }
+            else{
+                result += ", \\ q_t = " + this.q.toString();
+            }
+            return result;
+        }
+        viewReward(){
+            let menu = ui.createPopup({
+                title: "Reward",
+                content: ui.createStackLayout({
+                    children: [
+                        ui.createLatexLabel({
+                            text: Utils.getMath("\\begin{matrix} \
+                            \\\\ \\text{Increases \\lambda \\ exponent (additive).} \
+                            \\\\ \\lambda \\rightarrow \\lambda ^{1 + \\frac{\\log_{10}{t}}{625}} \
+                            \\end{matrix}"),
+                            fontSize: 16
+                        })
+                    ]
+                })
+            })
+            menu.show();
+        }
+
+        getInternalState() {
+            return JSON.stringify({
+                t: `${this.t}`,
+                q: `${this.q}`,
+                isUnlocked: `${this.isUnlocked}`,
+                currency: `${this.currency}`,
+                laplaceCurrency: `${this.laplaceCurrency}`,
+                maxRho: `${this.maxRho}`
+            })
+        }
+
+        setInternalState(state) {
+            let values = JSON.parse(state);
+            if(values.t) { this.t = parseFloat(values.t); }
+            if(values.q) { this.q = parseBigNumber(values.q); }
+            if(values.isUnlocked) { this.isUnlocked = values.isUnlocked == "true"; }
+            if(values.currency) this.currency = parseBigNumber(values.currency);
+            if(values.laplaceCurrency) this.laplaceCurrency = parseBigNumber(values.laplaceCurrency);
+            if(values.maxRho) this.maxRho = parseBigNumber(values.maxRho);
+        }
+
+        processPublish(){
+            resetUpgrades(this.upgrades);
+            this.resetT.level = 0;
+            this.t = 30;
+            this.currency = BigNumber.ZERO;
+            this.laplaceCurrency = BigNumber.ZERO;
+        }
+    }
+
     class MainSystem extends System {
         constructor() {
             super();
@@ -873,7 +1106,7 @@ var init = () => {
 
     }
     
-    systems = [new MainSystem(), new ChallengeOne(), new ChallengeTwo()]
+    systems = [new MainSystem(), new ChallengeOne(), new ChallengeTwo(), new ChallengeThree()]
 }
 
 // Essentially performs a reset of the given upgrades without a publish
@@ -1028,7 +1261,6 @@ var setInternalState = (state) => {
     if(values.activeSystemId) activeSystemId = parseInt(values.activeSystemId);
     if(values.laplaceActive) { laplaceActive = values.laplaceActive; laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"; }
     if(values.timer) timer = parseFloat(values.timer);
-    if(values.tDomainTime) { tDomainTime = parseInt(values.tDomainTime); log(values.tDomainTime); tDomainSlider.value = tDomainTime; }
     if(values.sDomainTime) { sDomainTime = parseInt(values.sDomainTime); sDomainSlider.value = sDomainTime; }
     if(values.automationEnabled) { automationEnabled = values.automationEnabled == "true"; autoLaplaceToggle.isToggled = automationEnabled; }
 };
@@ -1106,7 +1338,6 @@ var laplaceAutomationMenu = ui.createPopup({
             ]
         })
     })
-
 var createChallengeMenu = () => {
     let menu = ui.createPopup({
         title: "Assignments",
