@@ -30,6 +30,7 @@ import lt from "../Theories/Unofficial-CTs/LT/LT-main.js";
 import ltc1 from "../Theories/Unofficial-CTs/LT/LT-c1";
 import ltc2 from "../Theories/Unofficial-CTs/LT/LT-c2";
 import ltc3 from "../Theories/Unofficial-CTs/LT/LT-c3";
+import ltc4 from "../Theories/Unofficial-CTs/LT/LT-c4";
 const output = qs(".output");
 export const global = {
     dt: 1.5,
@@ -131,6 +132,8 @@ function singleSim(data) {
                 return yield ltc2(sendData);
             case "LT-c3":
                 return yield ltc3(sendData);
+            case "LT-c4":
+                return yield ltc4(sendData);
         }
     });
 }

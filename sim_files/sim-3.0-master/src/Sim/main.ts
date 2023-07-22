@@ -20,7 +20,8 @@ import bt from "../Theories/Unofficial-CTs/BT.js";
 import lt from "../Theories/Unofficial-CTs/LT/LT-main.js";
 import ltc1 from "../Theories/Unofficial-CTs/LT/LT-c1";
 import ltc2 from "../Theories/Unofficial-CTs/LT/LT-c2";
-
+import ltc3 from "../Theories/Unofficial-CTs/LT/LT-c3";
+import ltc4 from "../Theories/Unofficial-CTs/LT/LT-c4";
 export type theory = keyof typeof jsonData.theories;
 
 const output = qs(".output");
@@ -152,6 +153,10 @@ async function singleSim(data: parsedData): Promise<simResult> {
       return await ltc1(sendData);
     case "LT-c2":
       return await ltc2(sendData);
+    case "LT-c3":
+      return await ltc3(sendData);
+    case "LT-c4":
+      return await ltc4(sendData);
   }
 }
 

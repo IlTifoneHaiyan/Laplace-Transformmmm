@@ -385,6 +385,7 @@
     "LT-main": {
       "tauFactor": 0.015,
       "strats": {
+        "LT-main-Spam": {},
         "LT-main-30/30": {},
         "LT-main-2/2": {},
         "LT-main-60/2": {}
@@ -399,7 +400,19 @@
     "LT-c2": {
       "tauFactor": 1,
       "strats": {
-        "LT-c2": {}
+        "LT-c2-AI": {}
+      }
+    },
+    "LT-c3": {
+      "tauFactor": 1,
+      "strats": {
+        "LT-c3-AI": {}
+      }
+    },
+    "LT-c4": {
+      "tauFactor": 1,
+      "strats": {
+        "LT-c4": {}
       }
     }
   },
