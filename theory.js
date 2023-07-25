@@ -11,7 +11,7 @@ var tauExponent = 0.015;
 const basePubExp = 0.15
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.5";
+var version = "1.5.1";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 3
@@ -107,7 +107,7 @@ var init = () => {
         if (upgrade.maxLevel) temp.maxLevel = upgrade.maxLevel;
         if(!upgrade.refundable) temp.canBeRefunded = (_) => false;
         // ensures purchases subtract from system currency also
-        temp.boughtOrRefunded = (amount) => {
+        temp.bought = (amount) => {
             if(temp.level - amount >= 0 && upgrade.laplaceUpgrade == false){
                 if(!upgrade.isSuperExponentialCost) {
                     system.currency -= upgrade.costModel.getSum(temp.level - amount, temp.level).min(system.currency);
@@ -126,6 +126,29 @@ var init = () => {
                 }
             }
         }
+
+        temp.refunded = (amount) => {
+            if(amount - temp.level >= 0 && upgrade.laplaceUpgrade == false){
+                if(!upgrade.isSuperExponentialCost) {
+                    system.currency += upgrade.costModel.getSum(temp.level, amount - temp.level);
+                }
+                else{
+                    // Because the cost scaling is so sharp, assume the cumulative cost equals the cost of the highest level purchased
+                    system.currency += upgrade.costModel.getCost(temp.level);
+                }
+            }
+            else if(amount - temp.level >= 0 && upgrade.laplaceUpgrade == true){
+                log(amount - temp.level)
+                log(temp.level)
+                if(!upgrade.isSuperExponentialCost) {
+                    system.laplaceCurrency += upgrade.costModel.getSum(temp.level, amount - temp.level);
+                }
+                else{
+                    system.laplaceCurrency += upgrade.costModel.getCost(temp.level);
+                }
+            }
+        }
+        
         return temp;
     }
 
@@ -339,8 +362,8 @@ var init = () => {
                 title: "Reward",
                 content: ui.createStackLayout({
                     children: [
-                        ui.createLabel({
-                            text: "Unlock Laplace Transform automation options."
+                        ui.createLatexLabel({
+                            text: Utils.getMath("\\text{Unlock Laplace Transform automation options. \\\\ Additionally, each challenge completion \\\\ increases \\lambda \\ base by 100.}")
                         })
                     ]
                 })
@@ -686,7 +709,7 @@ var init = () => {
 
             this.omegaT = {
                 internalId: 1,
-                description: (_) => Utils.getMath("\\omega_{t} = 7^{" + this.omegaT.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\omega_{t} = 6^{" + this.omegaT.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\omega_t =" + this.getOmegaT(this.omegaT.upgrade.level), "\\omega_{t}=" + this.getOmegaT(this.omegaT.upgrade.level + amount)),
                 costModel: new ExponentialCost(1e1, Math.log2(10)),
                 laplaceUpgrade: false,
@@ -703,7 +726,7 @@ var init = () => {
                 internalId: 3,
                 description: (_) => Utils.getMath("c = e^" + (this.c.upgrade.level + 1)),
                 info: (amount) => Utils.getMathTo("c = " + this.getC(this.c.upgrade.level), "c = " + this.getC(this.c.upgrade.level + amount)),
-                costModel: new ExponentialCost(1e8, Math.log2(1e8)),
+                costModel: new ExponentialCost(1e5, Math.log2(1e4)),
                 laplaceUpgrade: false
             }
             this.c1s = {
@@ -724,12 +747,15 @@ var init = () => {
                 refundable: true
             }
 
-            this.resetT = theory.createSingularUpgrade(this.systemId * 100 + 8, currency, new FreeCost())
+            this.resetT = theory.createSingularUpgrade(this.systemId * 100 + 8, laplaceCurrency,
+                new ExponentialCost(1e6, Math.log2(1e6)))
             {
                 this.resetT.description = Utils.getMath("t \\leftarrow 0");
                 this.resetT.info = Utils.getMath("t \\leftarrow 0");
-                this.resetT.maxLevel = 4;
-                this.resetT.boughtOrRefunded = (_) => {
+                this.resetT.bought = (_) => {
+                    this.laplaceCurrency -= this.resetT.cost.getCost(
+                        this.resetT.level - 1
+                    )
                      this.t = 0;
                      this.q = BigNumber.ZERO;
                 }
@@ -740,8 +766,8 @@ var init = () => {
                 this.resetC1SandC2S.description = Utils.getMath("\\text{Reset c_{1s} and c_{2s}}");
                 this.resetC1SandC2S.info = Utils.getMath("\\text{Reset c_{1s} and c_{2s}}");
                 this.resetC1SandC2S.boughtOrRefunded = (_) => {
-                     this.c1s.upgrade.level = 0;
-                     this.c2s.upgrade.level = 0;
+                     this.c1s.upgrade.refund(this.c1s.upgrade.level);
+                     this.c2s.upgrade.refund(this.c2s.upgrade.level);
                 }
 
             }
@@ -754,7 +780,7 @@ var init = () => {
             }
         }
         
-        getOmegaT(level) { return BigNumber.SEVEN.pow(level); }
+        getOmegaT(level) { return BigNumber.from(6).pow(level); }
         getOmegaS(level) { return BigNumber.SEVEN.pow(0.1 * level); }
         getC(level) { return BigNumber.E.pow(level + 1); }
         getC1S(level) { return BigNumber.from(level) + 1; }
@@ -1188,7 +1214,7 @@ var init = () => {
 
             this.lambda = {
                 internalId: 7,
-                description: (_) => Utils.getMath("\\lambda = " + 10 * 10 ** (lambdaBase.level) + "^{" + (this.lambda.upgrade.level + this.lambdaExponent.upgrade.level * 0.05)+ "}"),
+                description: (_) => Utils.getMath("\\lambda = " + this.calculateLambdaBase() + "^{" + (this.lambda.upgrade.level)+ "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
                 costModel: new CompositeCost(36, new ExponentialCost(1e5, Math.log2(1e5)), new SuperExponentialCost(1e185, 1e5, 2).parseCustomCost()),
                 isSuperExponentialCost: true,
@@ -1204,27 +1230,29 @@ var init = () => {
             }
             this.tDotExponent = {
                 internalId: 9,
-                description: (_) => Localization.getUpgradeIncCustomExpDesc("\\dot{t}", 0.02),
-                info: (_) => Localization.getUpgradeIncCustomExpInfo("\\dot{t}", 0.02),
-                costModel: new ExponentialCost(BigNumber.TEN.pow(950), Math.log2(1e10)),
+                description: (_) => Localization.getUpgradeIncCustomExpDesc("\\dot{t}", 0.01),
+                info: (_) => Localization.getUpgradeIncCustomExpInfo("\\dot{t}", 0.01),
+                costModel: new ExponentialCost(BigNumber.TEN.pow(900), Math.log2(1e5)),
                 laplaceUpgrade: false,
                 isAvailable: false
             }
             this.omegaT = {
                 internalId: 10,
-                description: (_) => Utils.getMath("\\omega_t = 1.04^{" + this.omegaT.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\omega_t = 1.08^{" + this.omegaT.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\omega_t = " + this.getOmegaT(this.omegaT.upgrade.level),
                 "\\omega_t = " + this.getOmegaT(this.omegaT.upgrade.level + amount)),
-                costModel: new ExponentialCost(BigNumber.TEN.pow(2000), Math.log2(10)),
-                laplaceUpgrade: false
+                costModel: new SuperExponentialCost(BigNumber.TEN.pow(1800), 1e3, 1.01).parseCustomCost(),
+                laplaceUpgrade: false,
+                isSuperExponentialCost: true
             }
             this.omegaS = {
                 internalId: 11,
-                description: (_) => Utils.getMath("\\omega_s = 1.04^{" + this.omegaS.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\omega_s = 1.08^{" + this.omegaS.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\omega_s = " + this.getOmegaS(this.omegaS.upgrade.level),
                 "\\omega_s = " + this.getOmegaS(this.omegaS.upgrade.level + amount)),
-                costModel: new ExponentialCost(BigNumber.TEN.pow(380), Math.log2(10)),
-                laplaceUpgrade: true
+                costModel: new SuperExponentialCost(BigNumber.TEN.pow(300), 1e3, 1.01).parseCustomCost(),
+                laplaceUpgrade: true,
+                isSuperExponentialCost: true
             }
 
             this.upgrades = [this.tdot, this.c1, this.c2, this.c3, this.c1s, this.c2s, this.lambda, this.lambdaExponent, this.tDotExponent, this.omegaT, this.omegaS];
@@ -1238,11 +1266,11 @@ var init = () => {
         getC1(level) { return Utils.getStepwisePowerSum(level, 2, 10, 1); }
         getC2(level) { return BigNumber.TWO.pow(level); }
         getC3(level) { return BigNumber.TWO.pow(level); }
-        getTDot(level) { return 0.05 * Utils.getStepwisePowerSum(level, 2, 10, 0).pow(1 + this.tDotExponent.upgrade.level * 0.02); }
+        getTDot(level) { return 0.05 * Utils.getStepwisePowerSum(level, 2, 10, 0).pow(1 + this.tDotExponent.upgrade.level * 0.01); }
         getTDotExponentText(){
             let level = this.tDotExponent.upgrade.level;
             if(level > 0){
-                return "^{" + (1 + 0.02 * level).toFixed(2)+"}"
+                return "^{" + (1 + 0.01 * level).toFixed(2)+"}"
             }
             else{
                 return "";
@@ -1250,10 +1278,20 @@ var init = () => {
         }
         getC1S(level) { return BigNumber.E.pow(level * 0.5); }
         getC2S(level) { return Utils.getStepwisePowerSum(level, 2, 10, 0); }
-        getLambda(level) { return BigNumber.from(10 * 10 ** (lambdaBase.level)).pow(level);}
+        calculateLambdaBase() { 
+            let sum = 0;
+            if(isChallengeCleared[0]) {
+                for(var i = 0; i < isChallengeCleared.length; i++){
+                    sum += isChallengeCleared[i]
+                }
+            }
+
+            return 6 * 10 ** (lambdaBase.level) + 100 * sum;
+        }
+        getLambda(level) { return BigNumber.from(this.calculateLambdaBase()).pow(level);}
         getQS() { return (this.getC2S(this.c2s.upgrade.level).pow(2) * this.getC1S(this.c1s.upgrade.level) * this.s * (this.s + 1)); }
-        getOmegaT(level) { return BigNumber.from(1.04).pow(level); }
-        getOmegaS(level) { return BigNumber.from(1.04).pow(level); }
+        getOmegaT(level) { return BigNumber.from(1.08).pow(level); }
+        getOmegaS(level) { return BigNumber.from(1.08).pow(level); }
         getOmega() { return (this.getOmegaT(this.omegaT.upgrade.level) * this.getOmegaS(this.omegaS.upgrade.level)); }
         tick(elapsedTime, multiplier) {
             let dt = BigNumber.from(elapsedTime * multiplier);
@@ -1279,7 +1317,7 @@ var init = () => {
             else {
                 this.t += this.getTDot(this.tdot.upgrade.level) * dt;
                 this.q = this.getC3(this.c3.upgrade.level) * (1 - BigNumber.E.pow(-1 * this.t));
-                this.currency += bonus * this.getOmega().pow(1 + isChallengeCleared[3] * (1 + this.t).log() / 375)
+                this.currency += bonus * this.getOmega().pow(1 + isChallengeCleared[3] * (1 + this.t).log() / 200)
                 * this.getLambda(this.lambda.upgrade.level).pow(1 + this.lambdaExponent.upgrade.level * 0.05) * this.getC1(this.c1.upgrade.level).pow(1 + qtExponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.q * dt;
             }
         }
@@ -1306,7 +1344,7 @@ var init = () => {
         primaryEquation() {
             theory.primaryEquationHeight = 75;
             let qExponentText = (qtExponent.level > 0) ? "^{" + (1 + qtExponent.level * 0.05).toString() + "}" : "";
-            let lambdaExponentText = (this.lambda.upgrade.level > 0) ? "^{" + (1 + this.lambda.upgrade.level + this.lambdaExponent.upgrade.level * 0.05).toString() + "}" : "";
+            let lambdaExponentText = (this.lambda.upgrade.level > 0) ? "^{" + (1 + this.lambdaExponent.upgrade.level * 0.05).toFixed(2) + "}" : "";
             let omegaExponentText = isChallengeCleared[3] == 1? "^{" + (1 + isChallengeCleared[3] * (1 + this.t).log() / 375).toNumber().toFixed(2) + "}" : "";
             let piExponentText = (0.1 + piExponent.level * 0.1).toString()
             let result = "\\begin{matrix}";
@@ -1387,7 +1425,7 @@ var updateAvailability = () => {
         systems[activeSystemId].upgrades[upgradeId].upgrade.isAvailable = systems[activeSystemId].upgrades[upgradeId].laplaceUpgrade == laplaceActive
     }
 
-    systems[0].tDotExponent.upgrade.isAvailable = systems[2].isCleared() && !this.laplaceActive && activeSystemId == 0;
+    systems[0].tDotExponent.upgrade.isAvailable = isChallengeCleared[1] == 1 && !this.laplaceActive && activeSystemId == 0;
     systems[0].omegaT.upgrade.isAvailable = activeSystemId == 0 && isChallengeCleared[2] == 1 && !this.laplaceActive;
     systems[0].omegaS.upgrade.isAvailable = activeSystemId == 0 && isChallengeCleared[2] == 1 && this.laplaceActive;
     systems[3].resetT.isAvailable = activeSystemId == 3;
@@ -1515,18 +1553,27 @@ var getInternalState = () => {
  * @param {String} state
  */
 var setInternalState = (state) => {
-    let values = JSON.parse(state);
-    for (var id in values.systems) {
-        systems[id].setInternalState(values.systems[id])
+    if(state != "") {
+        let values = JSON.parse(state);
+        if('systems' in values){
+            for (var id in values.systems) {
+                systems[id].setInternalState(values.systems[id])
+            }
+        }
+        if('activeSystemId' in values) {
+            activeSystemId = parseInt(values.activeSystemId);
+            updateAvailability();
+            theory.invalidatePrimaryEquation();
+            theory.invalidateSecondaryEquation();
+            theory.invalidateTertiaryEquation();
+        }
+        if('completedChallenges' in values) isChallengeCleared = values.completedChallenges;
+        if('laplaceActive' in values) { laplaceActive = values.laplaceActive; laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"; }
+        if('timer') timer = parseFloat(values.timer);
+        if('tDomainTime' in values) { tDomainTime = parseInt(values.tDomainTime); tDomainSlider.value = tDomainTime; }
+        if('sDomainTime' in values) { sDomainTime = parseInt(values.sDomainTime); sDomainSlider.value = sDomainTime; }
+        if('automationEnabled' in values) { automationEnabled = values.automationEnabled == true; autoLaplaceToggle.isToggled = automationEnabled; }
     }
-
-    if(values.activeSystemId) activeSystemId = parseInt(values.activeSystemId);
-    if(values.completedChallenges) isChallengeCleared = values.completedChallenges;
-    if(values.laplaceActive) { laplaceActive = values.laplaceActive; laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"; }
-    if(values.timer) timer = parseFloat(values.timer);
-    if(values.tDomainTime) { tDomainTime = parseInt(values.tDomainTime); tDomainSlider.value = tDomainTime; }
-    if(values.sDomainTime) { sDomainTime = parseInt(values.sDomainTime); sDomainSlider.value = sDomainTime; }
-    if(values.automationEnabled) { automationEnabled = values.automationEnabled == true; autoLaplaceToggle.isToggled = automationEnabled; }
 };
 
 // UI
@@ -1731,7 +1778,7 @@ var getEquationOverlay = () => {
                   }
                 }
               },
-            isVisible: () => activeSystemId == 0 && systems[1].isCleared() || activeSystemId == 1    
+            isVisible: () => activeSystemId == 0 && isChallengeCleared[0] == 1 || activeSystemId == 1    
         }),
         ui.createFrame({
             isVisible: () => activeSystemId != 0,
@@ -1760,6 +1807,7 @@ var getCurrencyBarDelegate = () => {
                 text: () => Utils.getMath(theory.tau + theory.latexSymbol),
                 row: 0,
                 column: 0,
+                horizontalTextAlignment: TextAlignment.CENTER,
                 horizontalOptions: LayoutOptions.CENTER,
                 verticalOptions: LayoutOptions.CENTER,
             }),
@@ -1767,6 +1815,7 @@ var getCurrencyBarDelegate = () => {
                 text: () => Utils.getMath(currency.value.toString() + "\\rho"),
                 row: 0,
                 column: 1,
+                horizontalTextAlignment: TextAlignment.CENTER,
                 horizontalOptions: LayoutOptions.CENTER,
                 verticalOptions: LayoutOptions.CENTER,
             }),
@@ -1774,6 +1823,7 @@ var getCurrencyBarDelegate = () => {
                 text: () => Utils.getMath(laplaceCurrency.value.toString() + "\\Lambda"),
                 row: 0,
                 column: 2,
+                horizontalTextAlignment: TextAlignment.CENTER,
                 horizontalOptions: LayoutOptions.CENTER,
                 verticalOptions: LayoutOptions.CENTER,
                 isVisible: () => true // laplaceTransformUnlock.level > 0

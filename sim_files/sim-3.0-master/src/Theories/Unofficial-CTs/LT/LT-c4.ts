@@ -3,13 +3,13 @@ import { add, createResult, l10, subtract, theoryData, sleep, lfactorial } from 
 import Variable, { ExponentialCost } from "../../../Utils/variable.js";
 import jsonData from "../../../Data/data.json" assert { type: "json" };
 
-export default async function ltc2(data: theoryData) {
+export default async function ltc4(data: theoryData) {
   let sim = new ltSim(data);
   let res = await sim.simulate();
   return res;
 }
 
-type strat = keyof (typeof jsonData.theories)["LT-c2"]["strats"];
+type strat = keyof (typeof jsonData.theories)["LT-c4"]["strats"];
 
 class ltSim {
   conditions: Array<Function>;
@@ -52,7 +52,7 @@ class ltSim {
   
   constructor(data: theoryData) {
     this.strat = data.strat as strat;
-    this.theory = "LT-c2";
+    this.theory = "LT-c4";
     this.tauFactor = jsonData.theories["LT-main"]["tauFactor"];
     this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
     this.recovery = data.recovery ?? { value: 0, time: 0, recoveryTime: false };
@@ -65,42 +65,34 @@ class ltSim {
     this.ticks = 0;
     this.timer = 0;
     this.currencies = [0, 0];
-    this.cycleTimes = [55, 1 * 60];
+    this.cycleTimes = [55, 5 * 60];
     this.maxRho = 0;
     this.t_var = 0;
     this.q = 0;
     this.laplaceActive = true;
     this.variables = [
       new Variable({
-        cost: new ExponentialCost(1e1, 1.8),
-        value: 1,
-        stepwisePowerSum: { default: true },
+        cost: new ExponentialCost(1e1, 10),
+        varBase: 7
       }),
       new Variable({
-        cost: new ExponentialCost(1e2, 12),
-        varBase: 2,
+        cost: new ExponentialCost(1e1, 10),
+        varBase: 7**0.1,
       }),
       new Variable({
-        cost: new ExponentialCost(4e3, 5e2),
+        cost: new ExponentialCost(1e8, 1e8),
+        firstFreeCost: true,
+        varBase: Math.E
       }),
       new Variable({
-        cost: new ExponentialCost(50, 1.8),
-        stepwisePowerSum: { default: true },
+
+        cost: new ExponentialCost(1000, 1.2),
       }),
       new Variable({
-        cost: new ExponentialCost(11, 11),
-        varBase: 2,
-        firstFreeCost: true
+        cost: new ExponentialCost(1e6, 1.5),
       }),
-      new Variable({
-        cost: new ExponentialCost(1e2, 1e3),
-        varBase: 0.7,
-      }),
-      new Variable({
-        cost: new ExponentialCost(1e7, 1),
-      })
     ];
-    this.varNames = ["c1", "c2", "n", "c1s", "c2s", "lambda", "timeMachine"];
+    this.varNames = ["omega_t", "omega_s", "c", "c1s", "c2s"];
     this.boughtVars = [];
     this.tauH = 0;
     this.maxTauH = 0;
@@ -114,14 +106,12 @@ class ltSim {
   }
   getBuyingConditions() {
     const conditions: { [key in strat]: Array<boolean | Function> } = { 
-      "LT-c2-AI": [
+      "LT-c4": [
         true,
         true,
         true,
-        true,
-        true,
-        true,
-        true,
+        () => false,
+        () => false,
       ] 
   };
     const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
@@ -130,12 +120,10 @@ class ltSim {
   getMilestoneConditions() {
     return [
       () => this.laplaceActive == false,
+      () => this.laplaceActive == true,
       () => this.laplaceActive == false,
-      () => this.laplaceActive == false && this.variables[2].level < 4,
       () => this.laplaceActive == true,
       () => this.laplaceActive == true,
-      () => this.laplaceActive == true && this.variables[5].level < 10,
-      () => this.laplaceActive == true && this.variables[6].level < 1
     ];
   }
   async simulate() {
@@ -146,7 +134,7 @@ class ltSim {
       this.tick();
       if (this.currencies[0] > this.maxRho) this.maxRho = this.currencies[0];
       this.buyVariables();
-      pubCondition = this.maxRho >= 25;
+      pubCondition = this.maxRho >= 20;
       this.ticks++;
     }
     this.maxTauH = 69;
@@ -158,6 +146,14 @@ class ltSim {
     return result;
   }
   transform() {
+    if(this.laplaceActive){
+      this.t_var = 0;
+      this.q = 0;
+    }
+    else{
+      this.variables[3].level = 0;
+      this.variables[4].level = 0;
+    }
     this.laplaceActive = !this.laplaceActive;
     this.laplaceCounter++;
   }
@@ -168,22 +164,23 @@ class ltSim {
       this.transform();
     }
     let ldt = l10(this.dt);
+    let factor = this.laplaceActive? l10((10 ** (this.variables[2].value) - 1) ** 2) : 
+    l10((10 ** (this.variables[2].value) - (this.variables[3].level + 1) / (this.variables[4].level + 1)) ** 2)
     if (this.laplaceActive) {
-      if(this.variables[6].level >= 1) this.t_var = Math.min(add(this.t_var, ldt), 2)
-      let lqs = lfactorial(2 * this.variables[2].level + 1) - this.variables[5].value * (2 * this.variables[2].level + 2)
-      this.currencies[1] = add(this.currencies[1], this.variables[3].value + this.variables[4].value + lqs + ldt);
-    } else {
-      if(this.t_var > ldt) this.t_var = subtract(this.t_var, ldt);
-      this.q = this.t_var * (2 * this.variables[2].level + 1 ) + l10(Math.E ** (-1 * 10 ** this.t_var * 10 ** this.variables[5].value));
-      console.log(this.q);
-      this.currencies[0] = add(this.currencies[0], this.variables[0].value + this.variables[1].value + l10(1 + 10 ** this.q) + ldt);
+      let lqs = factor + this.t_var * 2
+      this.currencies[1] = add(this.currencies[1], this.variables[0].value + this.variables[1].value + lqs + ldt);
+    } 
+    else {
+      this.t_var = add(this.t_var, ldt);
+      this.currencies[0] = add(this.currencies[0], this.variables[0].value + this.variables[1].value + l10(Math.PI) * -1 * this.q + ldt);
     }
-    if (this.variables[6].level >= 1) this.timer += this.dt / 1.5;
+    console.log(this.currencies[0]);
+    this.timer += this.dt;
     this.t += this.dt / 1.5;
     this.dt *= this.ddt;
   }
   buyVariables() {
-    const currencyIndices = [0, 0, 0, 1, 1, 1, 1];
+    const currencyIndices = [0, 1, 0, 1, 1];
     for (let i = this.variables.length - 1; i >= 0; i--)
       while (true) {
         if (this.currencies[currencyIndices[i]] > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
