@@ -113,7 +113,7 @@ class ltSim {
         stepwisePowerSum: { default: true },
       }),
       new Variable({
-        cost: new CompositeCost(36, new ExponentialCost(1e5, 1e5), new SuperExponentialCost(1e185, 1e5, 2)),
+        cost: new CompositeCost(36, new ExponentialCost(1e5, 1e5), new SuperExponentialCost(1e185, 1e5, 30)),
         varBase: this.initialLambdaBase,
       }),
       new Variable({
@@ -123,12 +123,12 @@ class ltSim {
         cost: new ExponentialCost("1e900", 1e5),
       }),
       new Variable({
-        cost: new SuperExponentialCost("1e1800", 1e3, 1.01),
-        varBase: 1.08
+        cost: new ExponentialCost("1e1400", 16),
+        varBase: 2**0.1
       }),
       new Variable({
-        cost: new SuperExponentialCost("1e300", 1e3, 1.01),
-        varBase: 1.08
+        cost: new ExponentialCost("1e210", 1e4),
+        varBase: 2
       })
     ];
     this.varNames = ["c1", "c2", "c3", "t_dot", "c_s1", "c_s2", "lambda_s", "lambda_exp", "t_dot_exponent", "omega_t", "omega_s"];
@@ -213,9 +213,9 @@ class ltSim {
     return Math.max(0, val * this.tauFactor * 10 - l10(2));
   }
   updateMilestones() {
-    const points = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 800, 1800, 2500, 3000];
+    const points = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 800, 1000, 2000];
     let stage = binarySearch(points, Math.max(this.lastPub, this.maxRho));
-    const max = [3, 4, 2, 1];
+    const max = [3, 4, 2, 5];
     const tPriority = [1, 2, 3, 4];
     const sPriority = [3, 2, 1, 4];
     if (this.strat === "LT-main-2/2") {
@@ -234,7 +234,7 @@ class ltSim {
     } else {
       this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
     }
-    if (this.variables[6].varBase !== this.initialLambdaBase * 10 ** this.milestones[2]) {
+    if (this.variables[6].varBase !== this.initialLambdaBase * 10 ** this.milestones[2] + 100 * this.milestones[3]) {
       this.variables[6].varBase = this.initialLambdaBase * 10 ** this.milestones[2] + 100 * this.milestones[3];
       this.variables[6].reCalculate();
     }
@@ -270,7 +270,7 @@ class ltSim {
     return this.variables[5].value * 2 + this.variables[4].value / 2 + this.s + add(this.s, 0);
   }
   getOmegaExponent(){
-    return 1 + (this.lastPub > 2500? (this.t_var / 200) : 0)
+    return (this.milestones[3] >= 4? 1 + (this.t_var / 450) : 1)
   }
   tick() {
     let cap = this.laplaceActive ? this.cycleTimes[this.strat][1] : this.cycleTimes[this.strat][0];

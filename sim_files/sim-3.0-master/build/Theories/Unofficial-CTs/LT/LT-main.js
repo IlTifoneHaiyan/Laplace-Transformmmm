@@ -23,7 +23,7 @@ class ltSim {
         var _a;
         this.strat = data.strat;
         this.theory = "LT-main";
-        this.initialLambdaBase = 10;
+        this.initialLambdaBase = 6;
         this.tauFactor = jsonData.theories["LT-main"]["tauFactor"];
         this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
         this.recovery = (_a = data.recovery) !== null && _a !== void 0 ? _a : { value: 0, time: 0, recoveryTime: false };
@@ -79,22 +79,22 @@ class ltSim {
                 stepwisePowerSum: { default: true },
             }),
             new Variable({
-                cost: new CompositeCost(36, new ExponentialCost(1e5, 1e5), new SuperExponentialCost(1e185, 1e5, 2)),
+                cost: new CompositeCost(36, new ExponentialCost(1e5, 1e5), new SuperExponentialCost(1e185, 1e5, 30)),
                 varBase: this.initialLambdaBase,
             }),
             new Variable({
                 cost: new SuperExponentialCost(1e25, 1e10, 1e4),
             }),
             new Variable({
-                cost: new ExponentialCost("1e950", 1e10),
+                cost: new ExponentialCost("1e900", 1e5),
             }),
             new Variable({
-                cost: new ExponentialCost("1e2000", 1e1),
-                varBase: 1.04
+                cost: new ExponentialCost("1e1400", 16),
+                varBase: Math.pow(2, 0.1)
             }),
             new Variable({
-                cost: new ExponentialCost("1e380", 1e1),
-                varBase: 1.04
+                cost: new ExponentialCost("1e210", 1e4),
+                varBase: 2
             })
         ];
         this.varNames = ["c1", "c2", "c3", "t_dot", "c_s1", "c_s2", "lambda_s", "lambda_exp", "t_dot_exponent", "omega_t", "omega_s"];
@@ -144,8 +144,8 @@ class ltSim {
             () => this.laplaceActive == true,
             () => this.laplaceActive == true,
             () => this.laplaceActive == false,
-            () => this.laplaceActive == false && this.lastPub > 2100,
-            () => this.laplaceActive == true && this.lastPub > 2100,
+            () => this.laplaceActive == false,
+            () => this.laplaceActive == true,
         ];
     }
     getMilestoneTree() {
@@ -161,6 +161,10 @@ class ltSim {
             [3, 3, 2, 0],
             [3, 4, 2, 0],
             [3, 4, 2, 1],
+            [3, 4, 2, 2],
+            [3, 4, 2, 3],
+            [3, 4, 2, 4],
+            [3, 4, 2, 5],
         ];
         const tree = {
             "LT-main-Spam": globalOptimalRoute,
@@ -174,9 +178,9 @@ class ltSim {
         return Math.max(0, val * this.tauFactor * 10 - l10(2));
     }
     updateMilestones() {
-        const points = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
+        const points = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 800, 1000, 2000];
         let stage = binarySearch(points, Math.max(this.lastPub, this.maxRho));
-        const max = [3, 4, 2, 1];
+        const max = [3, 4, 2, 5];
         const tPriority = [1, 2, 3, 4];
         const sPriority = [3, 2, 1, 4];
         if (this.strat === "LT-main-2/2") {
@@ -197,8 +201,8 @@ class ltSim {
         else {
             this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
         }
-        if (this.variables[6].varBase !== this.initialLambdaBase * Math.pow(10, this.milestones[2])) {
-            this.variables[6].varBase = this.initialLambdaBase * Math.pow(10, this.milestones[2]);
+        if (this.variables[6].varBase !== this.initialLambdaBase * Math.pow(10, this.milestones[2]) + 100 * this.milestones[3]) {
+            this.variables[6].varBase = this.initialLambdaBase * Math.pow(10, this.milestones[2]) + 100 * this.milestones[3];
             this.variables[6].reCalculate();
         }
     }
@@ -239,7 +243,7 @@ class ltSim {
         return this.variables[5].value * 2 + this.variables[4].value / 2 + this.s + add(this.s, 0);
     }
     getOmegaExponent() {
-        return 1 + (this.lastPub > 3100 ? (this.t_var / 375) : 0);
+        return (this.milestones[3] >= 4 ? 1 + (this.t_var / 450) : 1);
     }
     tick() {
         let cap = this.laplaceActive ? this.cycleTimes[this.strat][1] : this.cycleTimes[this.strat][0];
@@ -254,11 +258,10 @@ class ltSim {
                 this.s = add(this.s, this.t_var);
                 this.t_var = 0;
                 this.currencies[1] = add(this.currencies[1], bonus * (0.1 + 0.1 * this.milestones[1]) + this.getQS() + ldt + (this.variables[9].value + this.variables[10].value));
-                1;
             }
         }
         else {
-            this.t_var = add(this.t_var, (1 + this.variables[8].level * 0.02) * (this.variables[3].value + l10(0.05)) + ldt);
+            this.t_var = add(this.t_var, (1 + this.variables[8].level * 0.01) * (this.variables[3].value + l10(0.05)) + ldt);
             let q = this.variables[2].value;
             if (this.t_var < 2)
                 q += l10(1 - Math.exp(-Math.pow(10, this.t_var)));

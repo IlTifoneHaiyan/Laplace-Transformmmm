@@ -97,7 +97,7 @@ export class SuperExponentialCost {
             this.initialCostInc = Math.log10(2) * Math.pow(10, this.initialCostInc);
     }
     getCost(level) {
-        // can by found using arithmetic series formula
+        // can be found using arithmetic series formula
         return this.cost + level / 2 * (2 * this.initialCostInc + (level - 1) * this.increment);
     }
 }

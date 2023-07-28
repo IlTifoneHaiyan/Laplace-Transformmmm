@@ -11,13 +11,13 @@ var tauExponent = 0.015;
 const basePubExp = 0.15
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.5.1";
+var version = "1.5.2";
 var currency;
 var laplaceActive = false;
-var activeSystemId = 3
+var activeSystemId = 0;
 var systems = []
 var timer = 0;
-var qtExponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase;
+var c1Exponent, piExponent, challengeUnlock, laplaceTransformUnlock, lambdaBase;
 var tDomainTime = 1;
 var sDomainTime = 1;
 var automationEnabled = false;
@@ -73,10 +73,10 @@ var init = () => {
     ////////////// ///////
     // Milestone Upgrades
     {
-        qtExponent = theory.createMilestoneUpgrade(0, 3);
-        qtExponent.getDescription = (_) => Localization.getUpgradeIncCustomExpDesc("q_t", 0.05);
-        qtExponent.getInfo = (_) => Localization.getUpgradeIncCustomExpInfo("q_t", "0.05");
-        qtExponent.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
+        c1Exponent = theory.createMilestoneUpgrade(0, 3);
+        c1Exponent.getDescription = (_) => Localization.getUpgradeIncCustomExpDesc("c_1", 0.05);
+        c1Exponent.getInfo = (_) => Localization.getUpgradeIncCustomExpInfo("c_1", "0.05");
+        c1Exponent.boughtOrRefunded = (_) => { theory.invalidatePrimaryEquation(); };
     }
     {
         piExponent = theory.createMilestoneUpgrade(1, 4);
@@ -810,7 +810,7 @@ var init = () => {
         }
 
         unlock(){
-            if(systems[0].laplaceCurrency >= BigNumber.TEN.pow(400)){
+            if(systems[0].currency >= BigNumber.TEN.pow(1000)){
                 this.isUnlocked = true;
             }
             else{
@@ -819,7 +819,7 @@ var init = () => {
                     content: ui.createStackLayout({
                         children: [
                             ui.createLatexLabel({
-                                text: Utils.getMath("\\Lambda > 1e400")
+                                text: Utils.getMath("\\rho > 1e1000")
                             }),
                         ]
                     })
@@ -1041,7 +1041,7 @@ var init = () => {
         }
 
         unlock(){
-            if(systems[0].currency >= BigNumber.TEN.pow(3100)){
+            if(systems[0].currency >= BigNumber.TEN.pow(2100)){
                 this.isUnlocked = true;
             }
             else{
@@ -1050,7 +1050,7 @@ var init = () => {
                     content: ui.createStackLayout({
                         children: [
                             ui.createLatexLabel({
-                                text: Utils.getMath("\\rho > 1e3100")
+                                text: Utils.getMath("\\rho > 1e2100")
                             }),
                         ]
                     })
@@ -1216,7 +1216,7 @@ var init = () => {
                 internalId: 7,
                 description: (_) => Utils.getMath("\\lambda = " + this.calculateLambdaBase() + "^{" + (this.lambda.upgrade.level)+ "}"),
                 info: (amount) => Utils.getMathTo("\\lambda = " + this.getLambda(this.lambda.upgrade.level), "\\lambda_{s} = " + this.getLambda(this.lambda.upgrade.level + amount)),
-                costModel: new CompositeCost(36, new ExponentialCost(1e5, Math.log2(1e5)), new SuperExponentialCost(1e185, 1e5, 2).parseCustomCost()),
+                costModel: new CompositeCost(36, new ExponentialCost(1e5, Math.log2(1e5)), new SuperExponentialCost(1e185, 1e5, 30).parseCustomCost()),
                 isSuperExponentialCost: true,
                 laplaceUpgrade: true,
             }
@@ -1238,21 +1238,19 @@ var init = () => {
             }
             this.omegaT = {
                 internalId: 10,
-                description: (_) => Utils.getMath("\\omega_t = 1.08^{" + this.omegaT.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\omega_t = " + this.getOmegaT(this.omegaT.upgrade.level)),
                 info: (amount) => Utils.getMathTo("\\omega_t = " + this.getOmegaT(this.omegaT.upgrade.level),
                 "\\omega_t = " + this.getOmegaT(this.omegaT.upgrade.level + amount)),
-                costModel: new SuperExponentialCost(BigNumber.TEN.pow(1800), 1e3, 1.01).parseCustomCost(),
+                costModel: new ExponentialCost(BigNumber.TEN.pow(1400), Math.log2(16)),
                 laplaceUpgrade: false,
-                isSuperExponentialCost: true
             }
             this.omegaS = {
                 internalId: 11,
-                description: (_) => Utils.getMath("\\omega_s = 1.08^{" + this.omegaS.upgrade.level + "}"),
+                description: (_) => Utils.getMath("\\omega_s = 2^{" + this.omegaS.upgrade.level + "}"),
                 info: (amount) => Utils.getMathTo("\\omega_s = " + this.getOmegaS(this.omegaS.upgrade.level),
                 "\\omega_s = " + this.getOmegaS(this.omegaS.upgrade.level + amount)),
-                costModel: new SuperExponentialCost(BigNumber.TEN.pow(300), 1e3, 1.01).parseCustomCost(),
+                costModel: new ExponentialCost(BigNumber.TEN.pow(210), Math.log2(1e4)),
                 laplaceUpgrade: true,
-                isSuperExponentialCost: true
             }
 
             this.upgrades = [this.tdot, this.c1, this.c2, this.c3, this.c1s, this.c2s, this.lambda, this.lambdaExponent, this.tDotExponent, this.omegaT, this.omegaS];
@@ -1290,8 +1288,8 @@ var init = () => {
         }
         getLambda(level) { return BigNumber.from(this.calculateLambdaBase()).pow(level);}
         getQS() { return (this.getC2S(this.c2s.upgrade.level).pow(2) * this.getC1S(this.c1s.upgrade.level) * this.s * (this.s + 1)); }
-        getOmegaT(level) { return BigNumber.from(1.08).pow(level); }
-        getOmegaS(level) { return BigNumber.from(1.08).pow(level); }
+        getOmegaT(level) { return BigNumber.from(2).pow(0.1 * level); }
+        getOmegaS(level) { return BigNumber.from(2).pow(level); }
         getOmega() { return (this.getOmegaT(this.omegaT.upgrade.level) * this.getOmegaS(this.omegaS.upgrade.level)); }
         tick(elapsedTime, multiplier) {
             let dt = BigNumber.from(elapsedTime * multiplier);
@@ -1317,8 +1315,8 @@ var init = () => {
             else {
                 this.t += this.getTDot(this.tdot.upgrade.level) * dt;
                 this.q = this.getC3(this.c3.upgrade.level) * (1 - BigNumber.E.pow(-1 * this.t));
-                this.currency += bonus * this.getOmega().pow(1 + isChallengeCleared[3] * (1 + this.t).log() / 200)
-                * this.getLambda(this.lambda.upgrade.level).pow(1 + this.lambdaExponent.upgrade.level * 0.05) * this.getC1(this.c1.upgrade.level).pow(1 + qtExponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.q * dt;
+                this.currency += bonus * this.getOmega().pow(1 + isChallengeCleared[3] * (1 + this.t).log10() / 450)
+                * this.getLambda(this.lambda.upgrade.level).pow(1 + this.lambdaExponent.upgrade.level * 0.05) * this.getC1(this.c1.upgrade.level).pow(1 + c1Exponent.level * 0.05) * this.getC2(this.c2.upgrade.level) * this.q * dt;
             }
         }
 
@@ -1343,13 +1341,13 @@ var init = () => {
 
         primaryEquation() {
             theory.primaryEquationHeight = 75;
-            let qExponentText = (qtExponent.level > 0) ? "^{" + (1 + qtExponent.level * 0.05).toString() + "}" : "";
+            let c1ExponentText = (c1Exponent.level > 0) ? "^{" + (1 + c1Exponent.level * 0.05).toString() + "}" : "";
             let lambdaExponentText = (this.lambda.upgrade.level > 0) ? "^{" + (1 + this.lambdaExponent.upgrade.level * 0.05).toFixed(2) + "}" : "";
-            let omegaExponentText = isChallengeCleared[3] == 1? "^{" + (1 + isChallengeCleared[3] * (1 + this.t).log() / 375).toNumber().toFixed(2) + "}" : "";
+            let omegaExponentText = isChallengeCleared[3] == 1? "^{" + (1 + isChallengeCleared[3] * (1 + this.t).log10() / 450).toNumber().toFixed(2) + "}" : "";
             let piExponentText = (0.1 + piExponent.level * 0.1).toString()
             let result = "\\begin{matrix}";
             if (!laplaceActive) {
-                result += "\\dot{\\rho} = c_{1} c_{2} " + (laplaceTransformUnlock.level > 0? "\\lambda" + lambdaExponentText : "")  + " q_t" + qExponentText;
+                result += "\\dot{\\rho} = c_{1} "  + c1ExponentText + " c_{2} " + (laplaceTransformUnlock.level > 0? "\\lambda" + lambdaExponentText : "")  + " q_t";
                 if (isChallengeCleared[2] == 1) result += "\\Omega" + omegaExponentText;
                 result += "\\\\ q_t = c_{3}(1-e^{-t})"
                 if (isChallengeCleared[2] == 1) result += "\\\\ \\Omega = \\omega_t \\omega_s"
@@ -1431,7 +1429,7 @@ var updateAvailability = () => {
     systems[3].resetT.isAvailable = activeSystemId == 3;
     systems[3].resetC1SandC2S.isAvailable = activeSystemId == 3;
     systems[4].resetT.isAvailable = activeSystemId == 4;
-    challengeUnlock.isAvailable = qtExponent.level >= 3 && piExponent.level >= 3;
+    challengeUnlock.isAvailable = c1Exponent.level >= 3 && piExponent.level >= 3;
 }
 
 /**
@@ -1797,9 +1795,8 @@ var getEquationOverlay = () => {
 }
 
 var getCurrencyBarDelegate = () => {
-    // to be restricted in final version
     challengeMenuButton.isVisible = () => activeSystemId == 0 && challengeUnlock.level > 0;
-    // laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
+    laplaceButton.isVisible = () => laplaceTransformUnlock.level > 0;
     currencyBar = ui.createGrid({
         columnDefinitions: ["20*", "30*", "auto"],
         children: [
@@ -1826,7 +1823,7 @@ var getCurrencyBarDelegate = () => {
                 horizontalTextAlignment: TextAlignment.CENTER,
                 horizontalOptions: LayoutOptions.CENTER,
                 verticalOptions: LayoutOptions.CENTER,
-                isVisible: () => true // laplaceTransformUnlock.level > 0
+                isVisible: () => laplaceTransformUnlock.level > 0
             }),
             laplaceButton,
             challengeMenuButton,
