@@ -1,21 +1,8 @@
-import { global } from "../../Sim/main.js";
-import { logToExp, simResult, theoryData } from "../../Utils/simHelpers.js";
-import { add, createResult, l10, subtract } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import { variableInterface } from "../../Utils/simHelpers.js";
-import Variable from "../../Utils/variable.js";
-import { getTauFactor } from "../../Sim/Components/helpers.js";
-
-export default async function rz(data: theoryData): Promise<simResult> {
-  let sim = new rzSim(data);
-  let res = await sim.simulate();
-  return res;
-}
-const resolution = 4;
-const getBlackholeSpeed = (z: number) => Math.min(Math.pow(z, 2) + 0.004, 1 / resolution);
-const getb = (level: number) => 1 + level / 4;
+export const resolution = 4;
+export const getBlackholeSpeed = (z: number) => Math.min(Math.pow(z, 2) + 0.004, 1 / resolution);
+export const getb = (level: number) => 1 << level;
 const getbMarginTerm = (level: number) => Math.pow(10, -getb(level));
-const c1Exp = [1, 1.14, 1.21, 1.25];
+export const c1Exp = [1, 1.14, 1.21, 1.25];
 let interpolate = (t: number) => {
   let v1 = t * t;
   let v2 = 1 - (1 - t) * (1 - t);
@@ -71,7 +58,7 @@ let zetaSmall = (t: number) => {
   let offset = fullIndex - index;
   let re = zeta01Table[index][0] * (1 - offset) + zeta01Table[index + 1][0] * offset;
   let im = zeta01Table[index][1] * (1 - offset) + zeta01Table[index + 1][1] * offset;
-  return [re, im, re * re + im * im];
+  return [re, im, Math.sqrt(re * re + im * im)];
 };
 let even = (n: number) => {
   if (n % 2 == 0) return 1;
@@ -239,239 +226,33 @@ let riemannSiegelZeta = (t: number, n: number) => {
   Z += R;
   return [Z * Math.cos(th), -Z * Math.sin(th), Z];
 };
-let zeta = (t: number) => {
-  if (t > 1) return riemannSiegelZeta(t, 4);
-  if (t < 0.1) return zetaSmall(t);
-  let offset = interpolate(((t - 0.1) * 10) / 9);
-  let a = zetaSmall(t);
-  let b = riemannSiegelZeta(t, 4);
-  return [a[0] * (1 - offset) + b[0] * offset, a[1] * (1 - offset) + b[1] * offset, a[2] * (1 - offset) + Math.abs(b[2]) * offset];
-};
-class rzSim {
-  conditions: Array<Array<boolean | Function>>;
-  milestoneConditions: Array<Function>;
-  milestoneTree: Array<Array<Array<number>>>;
 
-  stratIndex: number;
-  strat: string;
-  theory: string;
-  tauFactor: number;
-  //theory
-  cap: Array<number>;
-  recovery: { value: number; time: number; recoveryTime: boolean };
-  lastPub: number;
-  sigma: number;
-  totMult: number;
-  curMult: number;
-  dt: number;
-  ddt: number;
-  t: number;
-  ticks: number;
-  //currencies
-  currencies: Array<number>;
-  maxRho: number;
-  //initialize variables
-  variables: Array<variableInterface>;
-  t_var: number;
-  zTerm: number;
-  rCoord: number;
-  iCoord: number;
-  //pub values
-  tauH: number;
-  maxTauH: number;
-  pubT: number;
-  pubRho: number;
-  //milestones  [dimensions, b1exp, b2exp, b3exp]
-  milestones: Array<number>;
-  pubMulti: number;
-  result: Array<any>;
-  constructor(data: theoryData) {
-    this.stratIndex = findIndex(data.strats, data.strat);
-    this.strat = data.strat;
-    this.theory = "RZ";
-    this.tauFactor = getTauFactor(this.theory);
-    this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 1] : [Infinity, 0];
-    this.recovery = data.recovery ?? { value: 0, time: 0, recoveryTime: false };
-    this.lastPub = data.rho;
-    this.sigma = data.sigma;
-    this.totMult = this.getTotMult(data.rho);
-    this.curMult = 0;
-    this.dt = global.dt;
-    this.ddt = global.ddt;
-    this.t = 0;
-    this.ticks = 0;
-    this.currencies = [0, 0];
-    this.maxRho = 0;
-    this.t_var = 0;
-    this.zTerm = 0;
-    this.rCoord = -1.4603545088095868;
-    this.iCoord = 0;
-    this.variables = [
-      new Variable({
-        firstFreeCost: true,
-        cost: 220,
-        costInc: Math.pow(2, 0.7),
-        stepwisePowerSum: {
-          base: 2,
-          length: 8
-        }
-      }),
-      new Variable({
-        cost: 1400,
-        costInc: Math.pow(2, 2.8),
-        varBase: 2
-      }),
-      new Variable({
-        cost: 1e6,
-        costInc: 1e12
-        // power: use outside method
-      }),
-      new Variable({
-        stepwiseCost: 6,
-        cost: 120000,
-        costInc: Math.pow(100, 1 / 3),
-        value: 1,
-        stepwisePowerSum: {
-          base: 2,
-          length: 8
-        }
-      }),
-      new Variable({
-        cost: 1,
-        costInc: 10,
-        varBase: 2
-      })
-    ];
-    this.tauH = 0;
-    this.maxTauH = 0;
-    this.pubT = 0;
-    this.pubRho = 0;
-    //c1exp some-symbol w2term black-hole
-    this.milestones = [0, 0, 0, 0];
-    this.result = [];
-    this.pubMulti = 0;
-    this.conditions = this.getBuyingConditions();
-    this.milestoneConditions = this.getMilestoneConditions();
-    this.milestoneTree = this.getMilestoneTree();
-    this.updateMilestones();
-  }
-  getBuyingConditions() {
-    let conditions: Array<Array<boolean | Function>> = [
-      new Array(5).fill(true),
-      ...new Array(2).fill([
-        () => this.variables[0].lvl < this.variables[1].lvl * 4 + (this.milestones[0] ? 2 : 1),
-        true,
-        true,
-        () => (this.milestones[2] ? this.variables[3].cost + l10(4 + 0.5 * (this.variables[3].lvl % 8) + 0.0001) < this.variables[4].cost : true),
-        true
-      ]) // RZd, RZdBH
-    ];
-    conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-    return conditions;
-  }
-  getMilestoneConditions() {
-    return [() => true, () => true, () => this.variables[2].lvl < 8, () => this.milestones[1] == 1, () => this.milestones[2] == 1];
-  }
-  getMilestoneTree() {
-    return [
-      [
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 1, 1, 0],
-        [1, 1, 1, 0],
-        [2, 1, 1, 0],
-        [3, 1, 1, 0],
-        [3, 1, 1, 1] // black hole
-      ],
-      [
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 1, 1, 0],
-        [1, 1, 1, 0],
-        [2, 1, 1, 0],
-        [3, 1, 1, 0],
-        [3, 1, 1, 0] // RZd
-      ],
-      [
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 1, 1, 0],
-        [1, 1, 1, 0],
-        [2, 1, 1, 0],
-        [3, 1, 1, 0],
-        [3, 1, 1, 1] // RZdBH
-      ]
-    ];
-  }
-  getTotMult(val: number) {
-    return Math.max(0, val * this.tauFactor * 2.1 + l10(4));
-  }
-  updateMilestones() {
-    let stage = 0;
-    let points = [21, 50, 125, 200, 275, 350];
-    for (let i = 0; i < points.length; i++) {
-      if (Math.max(this.lastPub, this.maxRho) >= points[i]) stage = i + 1;
-    }
-    this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
-  }
-  async simulate() {
-    let pubCondition = false;
-    while (!pubCondition) {
-      if (!global.simulating) break;
-      if ((this.ticks + 1) % 500000 === 0) await sleep();
-      this.tick();
-      if (this.currencies[0] > this.maxRho) this.maxRho = this.currencies[0];
-      if (this.lastPub < 350) this.updateMilestones();
-      this.curMult = Math.pow(10, this.getTotMult(this.maxRho) - this.totMult);
-      this.buyVariables();
-      pubCondition = (global.forcedPubTime !== Infinity ? this.t > global.forcedPubTime : this.t > this.pubT * 2 || this.pubRho > this.cap[0] || this.curMult > 15) && this.pubRho > 8;
-      this.ticks++;
-    }
-    this.pubMulti = Math.pow(10, this.getTotMult(this.pubRho) - this.totMult);
-    this.result = createResult(this, "");
-    return this.result;
-  }
-  tick() {
-    let t_dot = this.milestones[3] ? getBlackholeSpeed(this.zTerm) : 1 / resolution;
-    this.t_var += (this.dt * t_dot) / 1.5;
-    let tTerm = l10(this.t_var);
-    let bonus = l10(this.dt) + this.totMult;
-    let w1Term = this.milestones[1] ? this.variables[3].value : 0;
-    let w2Term = this.milestones[2] ? this.variables[4].value : 0;
-    let c1Term = this.variables[0].value * c1Exp[this.milestones[0]];
-    let c2Term = this.variables[1].value;
-    let bTerm = getb(this.variables[2].lvl);
-    let z = zeta(this.t_var);
-    if (this.milestones[1]) {
-      let dr = z[0] - this.rCoord;
-      let di = z[1] - this.iCoord;
-      let derivTerm = l10(Math.sqrt(dr * dr + di * di)) - l10(this.dt * t_dot);
-      this.currencies[1] = add(this.currencies[1], derivTerm * bTerm + w1Term + w2Term + bonus);
-    }
-    this.rCoord = z[0];
-    this.iCoord = z[1];
-    this.zTerm = Math.abs(z[2]);
-    let bMTerm = getbMarginTerm(this.variables[2].lvl);
-    this.currencies[0] = add(this.currencies[0], tTerm + c1Term + c2Term + w1Term + bonus - l10(this.zTerm / bTerm + bMTerm));
-
-    this.t += this.dt / 1.5;
-    this.dt *= this.ddt;
-    if (this.maxRho < this.recovery.value) this.recovery.time = this.t;
-    this.tauH = (this.maxRho - this.lastPub) / (this.t / 3600);
-    if (this.maxTauH < this.tauH || this.maxRho >= this.cap[0] - this.cap[1] || this.pubRho < 8 || global.forcedPubTime !== Infinity) {
-      this.maxTauH = this.tauH;
-      this.pubT = this.t;
-      this.pubRho = this.maxRho;
-    }
-  }
-  buyVariables() {
-    let currencyIndices = [0, 0, 0, 1, 1];
-    for (let i = this.variables.length - 1; i >= 0; i--)
-      while (true) {
-        if (this.currencies[currencyIndices[i]] > this.variables[i].cost && (<Function>this.conditions[this.stratIndex][i])() && this.milestoneConditions[i]()) {
-          this.currencies[currencyIndices[i]] = subtract(this.currencies[currencyIndices[i]], this.variables[i].cost);
-          this.variables[i].buy();
-        } else break;
-      }
-  }
+// The lookup table only works before black hole is enabled in a pub, because then the time values would get misaligned.
+interface lookupsInterface {
+  zetaLookup: Array<Array<number>>;
+  zetaDerivLookup: Array<Array<number>>;
+  prevDt: number;
+  prevDdt: number;
 }
+export const lookups: lookupsInterface = {
+  zetaLookup: [],
+  zetaDerivLookup: [],
+  prevDt: 1.5,
+  prevDdt: 1.0001
+};
+export const zeta = (T: number, ticks: number, offGrid: boolean, cache: Array<Array<number>>) => {
+  if (!offGrid && cache[ticks]) return cache[ticks];
+  let t = Math.abs(T);
+  let z;
+  if (t >= 1) z = riemannSiegelZeta(t, 1);
+  else if (t < 0.1) z = zetaSmall(t);
+  else {
+    let offset = interpolate(((t - 0.1) * 10) / 9);
+    let a = zetaSmall(t);
+    let b = riemannSiegelZeta(t, 1);
+    z = [a[0] * (1 - offset) + b[0] * offset, a[1] * (1 - offset) + b[1] * offset, a[2] * (1 - offset) + Math.abs(b[2]) * offset];
+  }
+  if (T < 0) z[1] = -z[1];
+  if (!offGrid) cache[ticks] = z;
+  return z;
+};

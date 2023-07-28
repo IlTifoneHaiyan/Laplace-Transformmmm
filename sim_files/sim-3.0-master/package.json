@@ -1,13 +1,14 @@
 {
   "devDependencies": {
     "@types/html2canvas": "^1.0.0",
+    "@types/node": "^20.3.3",
     "typescript": "^4.8.2",
-    "webpack": "^5.74.0",
+    "webpack": "^5.88.1",
     "webpack-cli": "^4.10.0"
   },
   "scripts": {
-    "build": "webpack ./build/UI/simEvents.js --output-path  ./build/UI --output-filename simEventsBundle.js --mode development",
-    "prod": "webpack ./build/UI/simEvents.js --output-path  ./build/UI --output-filename simEventsBundle.js --mode production"
+    "build": "tsc && webpack  --mode development",
+    "prod": "tsc && webpack  --mode production"
   },
   "dependencies": {
     "html2canvas": "^1.4.1"

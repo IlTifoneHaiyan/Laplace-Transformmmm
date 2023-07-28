@@ -13,7 +13,6 @@ export function getTauFactor(theory) {
         case "T6":
         case "T7":
         case "T8":
-        case "LT-c1":
             return 1;
         case "WSP":
         case "SL":
@@ -22,8 +21,6 @@ export function getTauFactor(theory) {
             return 0.1;
         case "EF":
             return 0.4;
-        case "LT-main":
-            return 0.015;
     }
     throw `Invalid theory ${theory}. Please contact the author of the sim.`;
 }

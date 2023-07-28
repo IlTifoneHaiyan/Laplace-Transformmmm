@@ -1,9 +1,8 @@
-import { global } from "../../Sim/main.js";
-import { logToExp, simResult, theoryData } from "../../Utils/simHelpers.js";
-import { add, createResult, l10, subtract, arr } from "../../Utils/simHelpers.js";
-import { findIndex, sleep } from "../../Utils/helperFunctions.js";
-import { variableInterface } from "../../Utils/simHelpers.js";
-import Variable from "../../Utils/variable.js";
+import { global, varBuy, theory } from "../../Sim/main.js";
+import { add, createResult, l10, subtract, simResult, theoryData } from "../../Utils/helpers.js";
+import { sleep } from "../../Utils/helpers.js";
+import Variable, { ExponentialCost } from "../../Utils/variable.js";
+import jsonData from "../../Data/data.json" assert { type: "json" };
 
 export default async function t4(data: theoryData): Promise<simResult> {
   let sim = new t4Sim(data);
@@ -11,14 +10,15 @@ export default async function t4(data: theoryData): Promise<simResult> {
   return res;
 }
 
-class t4Sim {
-  conditions: Array<Array<Function>>;
-  milestoneConditions: Array<Function>;
-  milestoneTree: Array<Array<Array<number>>>;
+type strat = keyof typeof jsonData.theories.T4.strats;
 
-  stratIndex: number;
-  strat: string;
-  theory: string;
+class t4Sim {
+  conditions: Array<Function>;
+  milestoneConditions: Array<Function>;
+  milestoneTree: Array<Array<number>>;
+
+  strat: strat;
+  theory: theory;
   //theory
   cap: Array<number>;
   recovery: { value: number; time: number; recoveryTime: boolean };
@@ -36,8 +36,9 @@ class t4Sim {
   maxRho: number;
   q: number;
   //initialize variables
-  variables: Array<variableInterface>;
+  variables: Array<Variable>;
   variableSum: number;
+  boughtVars: Array<varBuy>;
   // minCost
   //pub values
   tauH: number;
@@ -47,42 +48,40 @@ class t4Sim {
   //milestones  [terms, c1exp, multQdot]
   milestones: Array<number>;
   pubMulti: number;
-  result: Array<any>;
 
   getBuyingConditions() {
-    let conditions: Array<Array<Function>> = [
-      [...arr(8, true)], //t4
-      [true, true, ...arr(6, false)], //t4c12
-      [false, false, true, ...arr(3, false), true, true], //t4c3
-      [...arr(3, false), true, false, false, true, true], //t4c4
-      [...arr(4, false), true, false, true, true], //t4c5
-      [...arr(4, false), true, true, true, true], //t4c56
-      [() => this.variables[0].cost + 1 < this.variables[1].cost, true, false, false, false, false, false, false], //t4c12d
-      [() => this.variables[0].cost + 1 < Math.min(this.variables[1].cost), true, true, false, false, false, () => this.variables[6].cost + 1 < this.variables[7].cost, true], //t4c123d
-      [() => this.variables[0].cost + 1 < this.variables[1].cost && this.maxRho < this.lastPub, () => this.maxRho < this.lastPub, false, true, true, true, true, true], //T4C456dC12rcvMS
-      [() => this.variables[0].cost + 1 < this.variables[1].cost && this.maxRho < this.lastPub, () => this.maxRho < this.lastPub, true, false, true, true, true, true], //T4C356dC12rcv
-      [...arr(4, false), true, true, () => this.variables[6].cost + 1 < this.variables[7].cost, true], //t4c56d
-      [
+    const conditions: { [key in strat]: Array<boolean | Function> } = {
+      T4: new Array(8).fill(true),
+      T4C12: [true, true, ...new Array(6).fill(false)],
+      T4C3: [false, false, true, ...new Array(3).fill(false), true, true],
+      T4C4: [...new Array(3).fill(false), true, false, false, true, true],
+      T4C5: [...new Array(4).fill(false), true, false, true, true],
+      T4C56: [...new Array(4).fill(false), true, true, true, true],
+      T4C12d: [() => this.variables[0].cost + 1 < this.variables[1].cost, true, false, false, false, false, false, false],
+      T4C123d: [() => this.variables[0].cost + 1 < Math.min(this.variables[1].cost), true, true, false, false, false, () => this.variables[6].cost + 1 < this.variables[7].cost, true],
+      T4C456dC12rcvMS: [() => this.variables[0].cost + 1 < this.variables[1].cost && this.maxRho < this.lastPub, () => this.maxRho < this.lastPub, false, true, true, true, true, true],
+      T4C356dC12rcv: [() => this.variables[0].cost + 1 < this.variables[1].cost && this.maxRho < this.lastPub, () => this.maxRho < this.lastPub, true, false, true, true, true, true],
+      T4C3d66: [
         false,
         false,
         () => this.variables[2].cost + 0.1 < (this.recursionValue ?? Infinity),
-        ...arr(3, false),
+        ...new Array(3).fill(false),
         () =>
-          this.variables[6].cost + l10(10 + (this.variables[6].lvl % 10)) <= Math.min(this.variables[7].cost, this.variables[2].cost) &&
-          this.variables[6].cost + l10(10 + (this.variables[6].lvl % 10)) + 1 < (this.recursionValue ?? Infinity),
-        () => this.variables[7].cost + 0.5 < (this.recursionValue ?? Infinity) && (this.curMult < 1 || this.variables[7].cost + l10(1.5) <= this.variables[2].cost)
-      ] //t4c3d66
-    ];
-    conditions = conditions.map((elem) => elem.map((i) => (typeof i === "function" ? i : () => i)));
-    return conditions;
+          this.variables[6].cost + l10(10 + (this.variables[6].level % 10)) <= Math.min(this.variables[7].cost, this.variables[2].cost) &&
+          this.variables[6].cost + l10(10 + (this.variables[6].level % 10)) + 1 < (this.recursionValue ?? Infinity),
+        () => this.variables[7].cost + 0.5 < (this.recursionValue ?? Infinity) && (this.curMult < 1 || this.variables[7].cost + l10(1.5) <= this.variables[2].cost),
+      ],
+    };
+    const condition = conditions[this.strat].map((v) => (typeof v === "function" ? v : () => v));
+    return condition;
   }
   getMilestoneConditions() {
     let conditions: Array<Function> = [() => true, () => true, () => true, () => this.milestones[0] > 0, () => this.milestones[0] > 1, () => this.milestones[0] > 2, () => true, () => true];
     return conditions;
   }
   getMilestoneTree() {
-    let tree: Array<Array<Array<number>>> = [
-      [
+    const tree: { [key in strat]: Array<Array<number>> } = {
+      T4: [
         [0, 0, 0],
         [1, 0, 0],
         [2, 0, 0],
@@ -90,35 +89,35 @@ class t4Sim {
         [3, 0, 1],
         [3, 0, 2],
         [3, 0, 3],
-        [3, 1, 3]
-      ], //t4
+        [3, 1, 3],
+      ],
 
-      [
+      T4C12: [
         [0, 0, 0],
-        [0, 1, 0]
-      ], //t4c12
-      [
+        [0, 1, 0],
+      ],
+      T4C3: [
         [0, 0, 0],
         [0, 0, 1],
         [0, 0, 2],
-        [0, 0, 3]
-      ], //t4c3
-      [
+        [0, 0, 3],
+      ],
+      T4C4: [
         [0, 0, 0],
         [1, 0, 0],
         [1, 0, 1],
         [1, 0, 2],
-        [1, 0, 3]
-      ], //t4c4
-      [
+        [1, 0, 3],
+      ],
+      T4C5: [
         [0, 0, 0],
         [1, 0, 0],
         [2, 0, 0],
         [2, 0, 1],
         [2, 0, 2],
-        [2, 0, 3]
-      ], //t4c5
-      [
+        [2, 0, 3],
+      ],
+      T4C56: [
         [0, 0, 0],
         [1, 0, 0],
         [2, 0, 0],
@@ -126,27 +125,21 @@ class t4Sim {
         [3, 0, 1],
         [3, 0, 2],
         [3, 0, 3],
-        [3, 0, 3]
-      ], //t4c56
-      [
+        [3, 0, 3],
+      ],
+      T4C12d: [
         [0, 0, 0],
-        [0, 1, 0]
-      ], //t4c12d
-      [
+        [0, 1, 0],
+      ],
+      T4C123d: [
         [0, 0, 0],
         [0, 1, 0],
         [0, 1, 1],
         [0, 1, 2],
-        [0, 1, 3]
-      ], //t4c123d
-      [
-        [0, 0, 0],
-        [1, 0, 0],
-        [1, 0, 1],
-        [1, 0, 2],
-        [1, 0, 3]
-      ], //T4C456dC12rcvMS (this doesnt matter)
-      [
+        [0, 1, 3],
+      ],
+      T4C456dC12rcvMS: [[0, 0, 0]],
+      T4C356dC12rcv: [
         [0, 0, 0],
         [0, 1, 0],
         [0, 1, 1],
@@ -154,35 +147,25 @@ class t4Sim {
         [0, 1, 3],
         [1, 1, 3],
         [2, 1, 3],
-        [3, 1, 3]
-      ], //T4C356dC12rcv
-      [
-        [0, 0, 0],
-        [1, 0, 0],
-        [2, 0, 0],
-        [3, 0, 0],
-        [3, 0, 1],
-        [3, 0, 2],
-        [3, 0, 3],
-        [3, 0, 3]
-      ], //t4c56d
-      [
+        [3, 1, 3],
+      ],
+      T4C3d66: [
         [0, 0, 0],
         [0, 0, 1],
         [0, 0, 2],
-        [0, 0, 3]
-      ] //t4c3d66
-    ];
-    return tree;
+        [0, 0, 3],
+      ],
+    };
+    return tree[this.strat];
   }
   getTotMult(val: number) {
     return Math.max(0, val * 0.165 - l10(4)) + l10((this.sigma / 20) ** (this.sigma < 65 ? 0 : this.sigma < 75 ? 1 : this.sigma < 85 ? 2 : 3));
   }
   updateMilestones(): void {
     const stage = Math.min(7, Math.floor(Math.max(this.lastPub, this.maxRho) / 25));
-    this.milestones = this.milestoneTree[this.stratIndex][Math.min(this.milestoneTree[this.stratIndex].length - 1, stage)];
+    this.milestones = this.milestoneTree[Math.min(this.milestoneTree.length - 1, stage)];
 
-    if (this.stratIndex === 8) {
+    if (this.strat === "T4C456dC12rcvMS") {
       const max = [3, 1, 3];
       this.milestones = [0, 0, 0];
 
@@ -206,8 +189,7 @@ class t4Sim {
     }
   }
   constructor(data: theoryData) {
-    this.stratIndex = findIndex(data.strats, data.strat);
-    this.strat = data.strat;
+    this.strat = data.strat as strat;
     this.theory = "T4";
     //theory
     this.cap = typeof data.cap === "number" && data.cap > 0 ? [data.cap, 2] : [Infinity, 0];
@@ -227,16 +209,17 @@ class t4Sim {
     this.q = 0;
     //initialize variables
     this.variables = [
-      new Variable({ lvl: 1, cost: 5, costInc: 1.305, value: 1, stepwisePowerSum: { default: true } }),
-      new Variable({ cost: 20, costInc: 3.75, varBase: 2 }),
-      new Variable({ cost: 2000, costInc: 2.468, varBase: 2 }),
-      new Variable({ cost: 1e4, costInc: 4.85, varBase: 3 }),
-      new Variable({ cost: 1e8, costInc: 12.5, varBase: 5 }),
-      new Variable({ cost: 1e10, costInc: 58, varBase: 10 }),
-      new Variable({ cost: 1e3, costInc: 100, stepwisePowerSum: { default: true } }),
-      new Variable({ cost: 1e4, costInc: 1000, varBase: 2 })
+      new Variable({ cost: new ExponentialCost(5, 1.305), stepwisePowerSum: { default: true }, firstFreeCost: true }),
+      new Variable({ cost: new ExponentialCost(20, 3.75), varBase: 2 }),
+      new Variable({ cost: new ExponentialCost(2000, 2.468), varBase: 2 }),
+      new Variable({ cost: new ExponentialCost(1e4, 4.85), varBase: 3 }),
+      new Variable({ cost: new ExponentialCost(1e8, 12.5), varBase: 5 }),
+      new Variable({ cost: new ExponentialCost(1e10, 58), varBase: 10 }),
+      new Variable({ cost: new ExponentialCost(1e3, 100), stepwisePowerSum: { default: true } }),
+      new Variable({ cost: new ExponentialCost(1e4, 1000), varBase: 2 }),
     ];
     this.variableSum = 0;
+    this.boughtVars = [];
     //pub values
     this.tauH = 0;
     this.maxTauH = 0;
@@ -244,7 +227,6 @@ class t4Sim {
     this.pubRho = 0;
     //milestones  [terms, c1exp, multQdot]
     this.milestones = [0, 0, 0];
-    this.result = [];
     this.pubMulti = 0;
     this.conditions = this.getBuyingConditions();
     this.milestoneConditions = this.getMilestoneConditions();
@@ -270,8 +252,12 @@ class t4Sim {
       this.ticks++;
     }
     this.pubMulti = 10 ** (this.getTotMult(this.pubRho) - this.totMult);
-    this.result = createResult(this, this.stratIndex === 11 ? ` q1:${this.variables[6].lvl} q2:${this.variables[7].lvl}` : "");
-    return this.result;
+    let result = createResult(this, this.strat === "T4C3d66" ? ` q1:${this.variables[6].level} q2:${this.variables[7].level}` : "");
+
+    while (this.boughtVars[this.boughtVars.length - 1].timeStamp > this.pubT) this.boughtVars.pop();
+    global.varBuy.push([result[7], this.boughtVars]);
+
+    return result;
   }
   tick() {
     let vq1 = this.variables[6].value;
@@ -284,7 +270,7 @@ class t4Sim {
     this.rho = add(this.rho, rhodot + l10(this.dt));
 
     this.t += this.dt / 1.5;
-    this.dt *= this.stratIndex === 11 && this.recursionValue === Number.MAX_VALUE ? Math.min(1.3, this.ddt * 10) : this.ddt;
+    this.dt *= this.strat === "T4C3d66" && this.recursionValue === Number.MAX_VALUE ? Math.min(1.3, this.ddt * 10) : this.ddt;
     if (this.maxRho < this.recovery.value) this.recovery.time = this.t;
 
     this.tauH = (this.maxRho - this.lastPub) / (this.t / 3600);
@@ -297,7 +283,11 @@ class t4Sim {
   buyVariables() {
     for (let i = this.variables.length - 1; i >= 0; i--)
       while (true) {
-        if (this.rho > this.variables[i].cost && this.conditions[this.stratIndex][i]() && this.milestoneConditions[i]()) {
+        if (this.rho > this.variables[i].cost && this.conditions[i]() && this.milestoneConditions[i]()) {
+          if (this.maxRho + 5 > this.lastPub) {
+            let vars = ["c1", "c2", "c3", "c4", "c5", "c6", "q1", "q2"];
+            this.boughtVars.push({ variable: vars[i], level: this.variables[i].level + 1, cost: this.variables[i].cost, timeStamp: this.t });
+          }
           this.rho = subtract(this.rho, this.variables[i].cost);
           this.variables[i].buy();
         } else break;
@@ -306,9 +296,9 @@ class t4Sim {
     let vc1 = this.variables[0].value * (1 + 0.15 * this.milestones[1]);
     let vc2 = this.variables[1].value;
     this.variableSum = vc1 + vc2;
-    if (this.variables[2].lvl > 0) this.variableSum = add(this.variableSum, this.variables[2].value + this.q);
-    if (this.variables[3].lvl > 0) this.variableSum = add(this.variableSum, this.variables[3].value + this.q * 2);
-    if (this.variables[4].lvl > 0) this.variableSum = add(this.variableSum, this.variables[4].value + this.q * 3);
-    if (this.variables[5].lvl > 0) this.variableSum = add(this.variableSum, this.variables[5].value + this.q * 4);
+    if (this.variables[2].level > 0) this.variableSum = add(this.variableSum, this.variables[2].value + this.q);
+    if (this.variables[3].level > 0) this.variableSum = add(this.variableSum, this.variables[3].value + this.q * 2);
+    if (this.variables[4].level > 0) this.variableSum = add(this.variableSum, this.variables[4].value + this.q * 3);
+    if (this.variables[5].level > 0) this.variableSum = add(this.variableSum, this.variables[5].value + this.q * 4);
   }
 }
