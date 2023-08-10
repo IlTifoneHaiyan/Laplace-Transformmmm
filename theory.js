@@ -11,7 +11,7 @@ var tauExponent = 0.015;
 const basePubExp = 0.15
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
-var version = "1.5.2";
+var version = "1.6";
 var currency;
 var laplaceActive = false;
 var activeSystemId = 0;
@@ -1344,7 +1344,7 @@ var init = () => {
             let c1ExponentText = (c1Exponent.level > 0) ? "^{" + (1 + c1Exponent.level * 0.05).toString() + "}" : "";
             let lambdaExponentText = (this.lambda.upgrade.level > 0) ? "^{" + (1 + this.lambdaExponent.upgrade.level * 0.05).toFixed(2) + "}" : "";
             let omegaExponentText = isChallengeCleared[3] == 1? "^{" + (1 + isChallengeCleared[3] * (1 + this.t).log10() / 450).toNumber().toFixed(2) + "}" : "";
-            let piExponentText = (0.1 + piExponent.level * 0.1).toString()
+            let piExponentText = (0.1 + piExponent.level * 0.1).toFixed(1)
             let result = "\\begin{matrix}";
             if (!laplaceActive) {
                 result += "\\dot{\\rho} = c_{1} "  + c1ExponentText + " c_{2} " + (laplaceTransformUnlock.level > 0? "\\lambda" + lambdaExponentText : "")  + " q_t";
@@ -1429,7 +1429,7 @@ var updateAvailability = () => {
     systems[3].resetT.isAvailable = activeSystemId == 3;
     systems[3].resetC1SandC2S.isAvailable = activeSystemId == 3;
     systems[4].resetT.isAvailable = activeSystemId == 4;
-    challengeUnlock.isAvailable = c1Exponent.level >= 3 && piExponent.level >= 3;
+    challengeUnlock.isAvailable = c1Exponent.level >= 3 && piExponent.level >= 4 && lambdaBase.level >= 2;
 }
 
 /**
@@ -1579,9 +1579,10 @@ var setInternalState = (state) => {
 var laplaceButton = ui.createButton({
     text: !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform",
     onClicked: () => {
-        laplaceActive = !laplaceActive
-        laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform"
-        updateAvailability()
+        laplaceActive = !laplaceActive;
+        timer = 0;
+        laplaceButton.text = !laplaceActive ? "Apply Laplace Transform" : "Invert Laplace Transform";
+        updateAvailability();
     },
     row: 1,
     column: 0
