@@ -7,7 +7,7 @@ import { log } from "../../../Downloads/TheorySDK.Win.1.4.29/api/Utils";
 
 var id = "LT";
 var name = "Laplace Transforms";
-var tauExponent = 0.015;
+var tauExponent = 0.06;
 const basePubExp = 0.15
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
