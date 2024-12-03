@@ -162,7 +162,7 @@ var init = () => {
 
         getCostFunction(){
             return (level) => {
-                return BigNumber.from(this.initialCost) * BigNumber.TEN.pow(level / 2 * (
+                return BigNumber.from(this.initialCost) * BigNumber.TWO.pow(level / 2 * (
                     2 * BigNumber.from(this.firstIncrease).log10() + (level - 1) * BigNumber.from(this.increment).log10()
                 ))
             }
