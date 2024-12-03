@@ -7,8 +7,8 @@ import { log } from "../../../Downloads/TheorySDK.Win.1.4.29/api/Utils";
 
 var id = "LT";
 var name = "Laplace Transforms";
-var tauExponent = 0.015;
-const basePubExp = 0.15
+var tauExponent = 0.075;
+const basePubExp = 0.75
 var description = "A custom theory based on Laplace transforms.";
 var authors = "Gaunter#1337";
 var version = "1.5.2";
@@ -54,7 +54,7 @@ var init = () => {
     currency = theory.createCurrency();
     laplaceCurrency = theory.createCurrency("Λ", "\\Lambda");
 
-    getCustomCost = (total) => 20 * (total + 1) * tauExponent;
+    getCustomCost = (total) => 20 * (total + 1) * tauExponent / 5;
     
     /////////////////////
     // Permanent Upgrades
@@ -1284,7 +1284,7 @@ var init = () => {
                 }
             }
 
-            return 6 * 10 ** (lambdaBase.level) + 100 * sum;
+            return 6 * 10 ** (lambdaBase.level) + 1100 * sum;
         }
         getLambda(level) { return BigNumber.from(this.calculateLambdaBase()).pow(level);}
         getQS() { return (this.getC2S(this.c2s.upgrade.level).pow(2) * this.getC1S(this.c1s.upgrade.level) * this.s * (this.s + 1)); }
